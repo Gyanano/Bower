@@ -48,15 +48,19 @@ def test_upload_list_detail_and_inline_file_flow(client: TestClient):
     assert created["title"] == "Moodboard"
     assert created["notes"] == "Warm tones"
     assert created["source_url"] == "https://example.com/ref"
+    assert created["status"] == "active"
     assert created["original_filename"] == "sample.png"
     assert created["mime_type"] == "image/png"
     assert created["file_url"] == f"/api/v1/inspirations/{inspiration_id}/file"
+    assert created["updated_at"] == created["created_at"]
+    assert created["archived_at"] is None
 
     listed = client.get("/api/v1/inspirations")
 
     assert listed.status_code == 200
     assert listed.json()["meta"]["total"] == 1
     assert listed.json()["data"][0]["id"] == inspiration_id
+    assert listed.json()["data"][0]["status"] == "active"
 
     detail = client.get(f"/api/v1/inspirations/{inspiration_id}")
 
@@ -104,3 +108,95 @@ def test_not_found_and_missing_stored_file_errors(client: TestClient):
 
     assert missing_file.status_code == 500
     assert missing_file.json()["error"]["code"] == "SAVE_FAILED"
+
+
+def test_patch_archive_and_delete_flows(client: TestClient):
+    create_response = client.post(
+        "/api/v1/inspirations",
+        data={"title": "Original", "notes": "First note", "source_url": "https://example.com/start"},
+        files={"file": ("sample.png", PNG_BYTES, "image/png")},
+    )
+    inspiration_id = create_response.json()["data"]["id"]
+
+    patched = client.patch(
+        f"/api/v1/inspirations/{inspiration_id}",
+        json={"title": "Updated", "notes": " ", "source_url": " https://example.com/updated "},
+    )
+
+    assert patched.status_code == 200
+    patched_data = patched.json()["data"]
+    assert patched_data["title"] == "Updated"
+    assert patched_data["notes"] is None
+    assert patched_data["source_url"] == "https://example.com/updated"
+    assert patched_data["updated_at"] >= patched_data["created_at"]
+
+    archived = client.post(f"/api/v1/inspirations/{inspiration_id}/archive")
+
+    assert archived.status_code == 200
+    archived_data = archived.json()["data"]
+    assert archived_data["status"] == "archived"
+    assert archived_data["archived_at"] is not None
+    assert archived_data["updated_at"] == archived_data["archived_at"]
+
+    active_list = client.get("/api/v1/inspirations")
+    archived_list = client.get("/api/v1/inspirations?status=archived")
+
+    assert active_list.status_code == 200
+    assert active_list.json()["meta"]["total"] == 0
+    assert archived_list.status_code == 200
+    assert archived_list.json()["meta"]["total"] == 1
+    assert archived_list.json()["data"][0]["id"] == inspiration_id
+    assert archived_list.json()["data"][0]["status"] == "archived"
+
+    stored_file = inspiration_service.STORE_DIR / Path(archived_data["storage_key"]).relative_to("store")
+    assert stored_file.exists()
+
+    deleted = client.delete(f"/api/v1/inspirations/{inspiration_id}")
+
+    assert deleted.status_code == 204
+    assert not stored_file.exists()
+    assert client.get(f"/api/v1/inspirations/{inspiration_id}").status_code == 404
+
+
+def test_delete_requires_archived_status_and_patch_requires_fields(client: TestClient):
+    create_response = client.post(
+        "/api/v1/inspirations",
+        files={"file": ("sample.png", PNG_BYTES, "image/png")},
+    )
+    inspiration_id = create_response.json()["data"]["id"]
+
+    delete_response = client.delete(f"/api/v1/inspirations/{inspiration_id}")
+    empty_patch_response = client.patch(f"/api/v1/inspirations/{inspiration_id}", json={})
+    invalid_status_response = client.get("/api/v1/inspirations?status=all")
+
+    assert delete_response.status_code == 409
+    assert delete_response.json()["error"]["code"] == "INSPIRATION_NOT_ARCHIVED"
+    assert empty_patch_response.status_code == 422
+    assert empty_patch_response.json()["error"]["code"] == "INVALID_REQUEST"
+    assert invalid_status_response.status_code == 422
+    assert invalid_status_response.json()["error"]["code"] == "INVALID_STATUS"
+
+
+def test_delete_succeeds_when_file_cleanup_fails_after_metadata_delete(client: TestClient, monkeypatch):
+    create_response = client.post(
+        "/api/v1/inspirations",
+        files={"file": ("sample.png", PNG_BYTES, "image/png")},
+    )
+    inspiration_id = create_response.json()["data"]["id"]
+
+    archived = client.post(f"/api/v1/inspirations/{inspiration_id}/archive")
+    archived_data = archived.json()["data"]
+    stored_file = inspiration_service.STORE_DIR / Path(archived_data["storage_key"]).relative_to("store")
+
+    assert stored_file.exists()
+
+    def fail_remove(_path):
+        raise OSError("simulated cleanup failure")
+
+    monkeypatch.setattr(inspiration_service.os, "remove", fail_remove)
+
+    deleted = client.delete(f"/api/v1/inspirations/{inspiration_id}")
+
+    assert deleted.status_code == 204
+    assert stored_file.exists()
+    assert client.get(f"/api/v1/inspirations/{inspiration_id}").status_code == 404

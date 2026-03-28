@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getApiOrigin, getInspiration, isNotFoundError } from "@/lib/api";
+import { InspirationActions } from "@/components/inspiration-actions";
 
 export default async function InspirationDetailPage({
   params,
@@ -14,28 +15,37 @@ export default async function InspirationDetailPage({
     const item = result.data;
     const fileUrl = `${getApiOrigin()}${item.file_url}`;
 
-    return (
-      <main className="stack">
-        <section className="card stack">
-          <Link href="/inspirations">← Back to inspirations</Link>
-          <div>
-            <h1>{item.title || item.original_filename}</h1>
-            <p className="muted">Added {new Date(item.created_at).toLocaleString()}</p>
-          </div>
-          <img alt={item.title || item.original_filename} className="detail-image" src={fileUrl} />
-          <div className="metadata">
+      return (
+        <main className="stack">
+          <section className="card stack">
+            <Link href="/inspirations">← Back to inspirations</Link>
+            <div>
+              <h1>{item.title || item.original_filename}</h1>
+              <p className="muted">Added {new Date(item.created_at).toLocaleString()}</p>
+              <p className="muted">Status: {item.status}</p>
+            </div>
+            <img alt={item.title || item.original_filename} className="detail-image" src={fileUrl} />
+            <div className="metadata">
             <div>
               <strong>Original filename:</strong> {item.original_filename}
             </div>
             <div>
               <strong>MIME type:</strong> {item.mime_type}
             </div>
-            <div>
-              <strong>File size:</strong> {item.file_size_bytes} bytes
-            </div>
-            {item.source_url ? (
               <div>
-                <strong>Source URL:</strong>{" "}
+                <strong>File size:</strong> {item.file_size_bytes} bytes
+              </div>
+              <div>
+                <strong>Last updated:</strong> {new Date(item.updated_at).toLocaleString()}
+              </div>
+              {item.archived_at ? (
+                <div>
+                  <strong>Archived at:</strong> {new Date(item.archived_at).toLocaleString()}
+                </div>
+              ) : null}
+              {item.source_url ? (
+                <div>
+                  <strong>Source URL:</strong>{" "}
                 <a href={item.source_url} rel="noreferrer" target="_blank">
                   {item.source_url}
                 </a>
@@ -46,10 +56,11 @@ export default async function InspirationDetailPage({
                 <strong>Notes:</strong> {item.notes}
               </div>
             ) : null}
-          </div>
-        </section>
-      </main>
-    );
+            </div>
+          </section>
+          <InspirationActions item={item} />
+        </main>
+      );
   } catch (error) {
     if (isNotFoundError(error)) {
       notFound();

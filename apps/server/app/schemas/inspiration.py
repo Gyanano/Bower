@@ -6,10 +6,12 @@ class InspirationBase(BaseModel):
 
     id: str
     title: str | None = None
+    status: str
     original_filename: str
     mime_type: str
     file_size_bytes: int
     created_at: str
+    updated_at: str
 
 
 class InspirationListItem(InspirationBase):
@@ -21,6 +23,13 @@ class InspirationDetail(InspirationBase):
     source_url: str | None = None
     storage_key: str
     file_url: str
+    archived_at: str | None = None
+
+
+class InspirationMetadataPatch(BaseModel):
+    title: str | None = None
+    notes: str | None = None
+    source_url: str | None = None
 
 
 class PaginationMeta(BaseModel):

@@ -16,6 +16,7 @@ from app.schemas.inspiration import (
     InspirationDetailEnvelope,
     InspirationListEnvelope,
     InspirationListItem,
+    InspirationMetadataPatch,
     PaginationMeta,
 )
 from app.storage.local_files import MAX_FILE_SIZE_BYTES, STORE_DIR, persist_upload
@@ -61,11 +62,14 @@ def _row_to_record(row) -> InspirationRecord:
         title=row["title"],
         notes=row["notes"],
         source_url=row["source_url"],
+        status=row["status"],
         original_filename=row["original_filename"],
         mime_type=row["mime_type"],
         file_size_bytes=row["file_size_bytes"],
         storage_key=row["storage_key"],
         created_at=row["created_at"],
+        updated_at=row["updated_at"],
+        archived_at=row["archived_at"],
     )
 
 
@@ -75,11 +79,14 @@ def _detail_payload(record: InspirationRecord) -> dict:
         "title": record.title,
         "notes": record.notes,
         "source_url": record.source_url,
+        "status": record.status,
         "original_filename": record.original_filename,
         "mime_type": record.mime_type,
         "file_size_bytes": record.file_size_bytes,
         "storage_key": record.storage_key,
         "created_at": record.created_at,
+        "updated_at": record.updated_at,
+        "archived_at": record.archived_at,
         "file_url": f"/api/v1/inspirations/{record.id}/file",
     }
 
@@ -105,6 +112,7 @@ async def create_inspiration(
         raise _error(413, "FILE_TOO_LARGE", f"File exceeds {MAX_FILE_SIZE_BYTES} bytes")
 
     created_at = _utc_now()
+    updated_at = created_at
     content_hash = hashlib.sha256(payload).hexdigest()
     storage_key = f"store/{content_hash[:2]}/{content_hash[2:4]}/{content_hash}-{uuid4().hex[:8]}"
 
@@ -123,6 +131,9 @@ async def create_inspiration(
         file_size_bytes=len(payload),
         storage_key=persisted,
         created_at=created_at,
+        updated_at=updated_at,
+        status="active",
+        archived_at=None,
     )
 
     try:
@@ -138,8 +149,11 @@ async def create_inspiration(
                     mime_type,
                     file_size_bytes,
                     storage_key,
-                    created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    created_at,
+                    updated_at,
+                    status,
+                    archived_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     record.id,
@@ -151,6 +165,9 @@ async def create_inspiration(
                     record.file_size_bytes,
                     record.storage_key,
                     record.created_at,
+                    record.updated_at,
+                    record.status,
+                    record.archived_at,
                 ),
             )
             connection.commit()
@@ -163,21 +180,24 @@ async def create_inspiration(
     return InspirationDetailEnvelope(data=InspirationDetail.model_validate(_detail_payload(record)))
 
 
-def list_inspirations(limit: int, offset: int) -> InspirationListEnvelope:
+def list_inspirations(limit: int, offset: int, status: str) -> InspirationListEnvelope:
     safe_limit = max(1, min(limit, 100))
     safe_offset = max(offset, 0)
+    if status not in {"active", "archived"}:
+        raise _error(422, "INVALID_STATUS", "Status must be active or archived")
 
     with get_connection() as connection:
         rows = connection.execute(
             """
-            SELECT id, title, original_filename, mime_type, file_size_bytes, created_at
+            SELECT id, title, status, original_filename, mime_type, file_size_bytes, created_at, updated_at
             FROM inspirations
+            WHERE status = ?
             ORDER BY datetime(created_at) DESC, id DESC
             LIMIT ? OFFSET ?
             """,
-            (safe_limit, safe_offset),
+            (status, safe_limit, safe_offset),
         ).fetchall()
-        total = connection.execute("SELECT COUNT(*) FROM inspirations").fetchone()[0]
+        total = connection.execute("SELECT COUNT(*) FROM inspirations WHERE status = ?", (status,)).fetchone()[0]
 
     data = [InspirationListItem.model_validate(dict(row)) for row in rows]
     return InspirationListEnvelope(data=data, meta=PaginationMeta(limit=safe_limit, offset=safe_offset, total=total))
@@ -196,6 +216,71 @@ def _fetch_record(inspiration_id: str) -> InspirationRecord:
 def get_inspiration_by_id(inspiration_id: str) -> InspirationDetailEnvelope:
     record = _fetch_record(inspiration_id)
     return InspirationDetailEnvelope(data=InspirationDetail.model_validate(_detail_payload(record)))
+
+
+def update_inspiration_metadata(inspiration_id: str, patch: InspirationMetadataPatch) -> InspirationDetailEnvelope:
+    if not patch.model_fields_set:
+        raise _error(422, "INVALID_REQUEST", "At least one metadata field must be provided")
+
+    updates: dict[str, str | None] = {}
+    for field_name in patch.model_fields_set:
+        updates[field_name] = _normalize_optional_text(getattr(patch, field_name))
+
+    updates["updated_at"] = _utc_now()
+
+    assignments = ", ".join(f"{field_name} = ?" for field_name in updates)
+    values = [updates[field_name] for field_name in updates]
+
+    with get_connection() as connection:
+        cursor = connection.execute(
+            f"UPDATE inspirations SET {assignments} WHERE id = ?",
+            (*values, inspiration_id),
+        )
+        connection.commit()
+
+    if cursor.rowcount == 0:
+        raise _error(404, "INSPIRATION_NOT_FOUND", "Inspiration item not found")
+
+    return get_inspiration_by_id(inspiration_id)
+
+
+def archive_inspiration(inspiration_id: str) -> InspirationDetailEnvelope:
+    record = _fetch_record(inspiration_id)
+    if record.status == "archived":
+        return InspirationDetailEnvelope(data=InspirationDetail.model_validate(_detail_payload(record)))
+
+    archived_at = _utc_now()
+
+    with get_connection() as connection:
+        connection.execute(
+            """
+            UPDATE inspirations
+            SET status = 'archived', archived_at = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (archived_at, archived_at, inspiration_id),
+        )
+        connection.commit()
+
+    return get_inspiration_by_id(inspiration_id)
+
+
+def delete_archived_inspiration(inspiration_id: str) -> None:
+    record = _fetch_record(inspiration_id)
+    if record.status != "archived":
+        raise _error(409, "INSPIRATION_NOT_ARCHIVED", "Only archived inspirations can be deleted")
+
+    stored_path = STORE_DIR / Path(record.storage_key).relative_to("store")
+
+    with get_connection() as connection:
+        connection.execute("DELETE FROM inspirations WHERE id = ?", (inspiration_id,))
+        connection.commit()
+
+    if stored_path.exists():
+        try:
+            os.remove(stored_path)
+        except OSError:
+            pass
 
 
 def get_inspiration_file_response(inspiration_id: str) -> FileResponse:

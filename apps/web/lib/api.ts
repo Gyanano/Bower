@@ -1,10 +1,12 @@
 export interface InspirationListItem {
   id: string;
   title: string | null;
+  status: "active" | "archived";
   original_filename: string;
   mime_type: string;
   file_size_bytes: number;
   created_at: string;
+  updated_at: string;
 }
 
 export interface InspirationDetail extends InspirationListItem {
@@ -12,6 +14,13 @@ export interface InspirationDetail extends InspirationListItem {
   source_url: string | null;
   storage_key: string;
   file_url: string;
+  archived_at: string | null;
+}
+
+export interface InspirationMetadataPatch {
+  title?: string | null;
+  notes?: string | null;
+  source_url?: string | null;
 }
 
 interface ApiErrorEnvelope {
@@ -62,12 +71,16 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
     );
   }
 
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
   return (await response.json()) as T;
 }
 
-export async function getInspirations() {
+export async function getInspirations(status: "active" | "archived" = "active") {
   return apiFetch<{ data: InspirationListItem[]; meta: { limit: number; offset: number; total: number } }>(
-    "/inspirations",
+    `/inspirations?status=${status}`,
   );
 }
 
@@ -79,6 +92,28 @@ export async function createInspiration(formData: FormData) {
   return apiFetch<{ data: InspirationDetail }>("/inspirations", {
     body: formData,
     method: "POST",
+  });
+}
+
+export async function updateInspiration(id: string, payload: InspirationMetadataPatch) {
+  return apiFetch<{ data: InspirationDetail }>(`/inspirations/${id}`, {
+    body: JSON.stringify(payload),
+    headers: {
+      "content-type": "application/json",
+    },
+    method: "PATCH",
+  });
+}
+
+export async function archiveInspiration(id: string) {
+  return apiFetch<{ data: InspirationDetail }>(`/inspirations/${id}/archive`, {
+    method: "POST",
+  });
+}
+
+export async function deleteInspiration(id: string) {
+  await apiFetch<void>(`/inspirations/${id}`, {
+    method: "DELETE",
   });
 }
 
