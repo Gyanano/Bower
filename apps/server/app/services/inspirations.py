@@ -206,4 +206,9 @@ def get_inspiration_file_response(inspiration_id: str) -> FileResponse:
         raise _error(500, "SAVE_FAILED", "Stored file is missing from local storage")
 
     media_type = record.mime_type or mimetypes.guess_type(record.original_filename)[0] or "application/octet-stream"
-    return FileResponse(path=stored_path, filename=record.original_filename, media_type=media_type)
+    return FileResponse(
+        path=stored_path,
+        filename=record.original_filename,
+        media_type=media_type,
+        content_disposition_type="inline",
+    )

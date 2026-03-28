@@ -1,8 +1,25 @@
 import Link from "next/link";
-import { getInspirations } from "@/lib/api";
+import { getApiErrorMessage, getInspirations } from "@/lib/api";
 
 export default async function InspirationsPage() {
-  const result = await getInspirations();
+  let result: Awaited<ReturnType<typeof getInspirations>>;
+
+  try {
+    result = await getInspirations();
+  } catch (error) {
+    return (
+      <main className="stack">
+        <section className="card stack">
+          <div>
+            <h1>Saved inspirations</h1>
+            <p className="muted">Could not load inspirations right now.</p>
+          </div>
+          <p className="muted">{getApiErrorMessage(error)}</p>
+          <Link href="/upload">Try uploading a new inspiration</Link>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="stack">
