@@ -53,6 +53,78 @@ def _provider_transport_message(exc: BaseException) -> str:
     return "AI provider request failed"
 
 
+def _extract_output_text(response_payload: object) -> str:
+    if not isinstance(response_payload, dict):
+        return ""
+
+    direct_output_text = response_payload.get("output_text")
+    candidates: list[str] = []
+
+    if isinstance(direct_output_text, str) and direct_output_text.strip():
+        candidates.append(direct_output_text.strip())
+
+    output_items = response_payload.get("output")
+    if isinstance(output_items, list):
+        for output_item in output_items:
+            if not isinstance(output_item, dict):
+                continue
+
+            content_items = output_item.get("content")
+            if not isinstance(content_items, list):
+                continue
+
+            for content_item in content_items:
+                if not isinstance(content_item, dict):
+                    continue
+
+                content_type = str(content_item.get("type", "")).strip().lower()
+                if content_type not in {"output_text", "text", ""}:
+                    continue
+
+                text_value = content_item.get("text")
+                if isinstance(text_value, str) and text_value.strip():
+                    candidates.append(text_value.strip())
+                    continue
+
+                if isinstance(text_value, dict):
+                    nested_text = text_value.get("value") or text_value.get("text")
+                    if isinstance(nested_text, str) and nested_text.strip():
+                        candidates.append(nested_text.strip())
+
+    json_candidates: list[tuple[str, str]] = []
+    for candidate in candidates:
+        try:
+            parsed_candidate = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+
+        if isinstance(parsed_candidate, dict):
+            canonical_candidate = json.dumps(parsed_candidate, sort_keys=True, separators=(",", ":"))
+            json_candidates.append((candidate, canonical_candidate))
+
+    unique_json_candidates: list[str] = []
+    seen_canonical_candidates: set[str] = set()
+    for original_candidate, canonical_candidate in json_candidates:
+        if canonical_candidate in seen_canonical_candidates:
+            continue
+        seen_canonical_candidates.add(canonical_candidate)
+        unique_json_candidates.append(original_candidate)
+
+    if len(unique_json_candidates) == 1:
+        return unique_json_candidates[0]
+    if len(unique_json_candidates) > 1:
+        raise _error(502, "AI_ANALYSIS_FAILED", "AI provider returned ambiguous analysis output")
+
+    return candidates[0] if len(candidates) == 1 else ""
+
+
+def _responses_url(base_url: str) -> str:
+    normalized_base_url = base_url.rstrip("/")
+    if normalized_base_url.endswith("/v1"):
+        return f"{normalized_base_url}/responses"
+    return f"{normalized_base_url}/v1/responses"
+
+
 def analyze_image(*, payload: bytes, mime_type: str) -> tuple[str, list[str]]:
     provider = os.getenv("BOWER_AI_PROVIDER", "").strip().lower()
     if provider != "openai":
@@ -60,6 +132,7 @@ def analyze_image(*, payload: bytes, mime_type: str) -> tuple[str, list[str]]:
 
     api_key = _require_env("BOWER_OPENAI_API_KEY")
     model = os.getenv("BOWER_OPENAI_MODEL", "gpt-4.1-mini").strip() or "gpt-4.1-mini"
+    base_url = os.getenv("BOWER_OPENAI_BASE_URL", "https://api.openai.com").strip() or "https://api.openai.com"
 
     encoded = base64.b64encode(payload).decode("utf-8")
     request_body = {
@@ -99,7 +172,7 @@ def analyze_image(*, payload: bytes, mime_type: str) -> tuple[str, list[str]]:
     }
 
     http_request = request.Request(
-        url="https://api.openai.com/v1/responses",
+        url=_responses_url(base_url),
         data=json.dumps(request_body).encode("utf-8"),
         headers={
             "authorization": f"Bearer {api_key}",
@@ -121,8 +194,8 @@ def analyze_image(*, payload: bytes, mime_type: str) -> tuple[str, list[str]]:
     except (error.URLError, TimeoutError, socket.timeout) as exc:
         raise _error(502, "AI_ANALYSIS_FAILED", _provider_transport_message(exc)) from exc
 
-    output_text = response_payload.get("output_text")
-    if isinstance(output_text, str) and output_text.strip():
+    output_text = _extract_output_text(response_payload)
+    if output_text:
         try:
             return _normalize_result(json.loads(output_text))
         except json.JSONDecodeError as exc:
