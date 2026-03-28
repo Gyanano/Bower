@@ -1,0 +1,13 @@
+{
+  "name": "bower",
+  "private": true,
+  "packageManager": "pnpm@10.17.1",
+  "scripts": {
+    "dev:server": "python -m uvicorn app.main:app --reload --app-dir apps/server",
+    "dev:web": "pnpm --dir apps/web dev",
+    "build:web": "pnpm --dir apps/web build"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.4"
+  }
+}
