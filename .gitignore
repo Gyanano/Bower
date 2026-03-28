@@ -1,6 +1,7 @@
 .DS_Store
 
 node_modules/
+/apps/web/package-lock.json
 .next/
 dist/
 .turbo/
