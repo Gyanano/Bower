@@ -8,6 +8,7 @@ from app.schemas.inspiration import (
     InspirationMetadataPatch,
 )
 from app.services.inspirations import (
+    analyze_inspiration,
     archive_inspiration,
     create_inspiration,
     delete_archived_inspiration,
@@ -57,6 +58,15 @@ def patch_inspiration_metadata(inspiration_id: str, patch: InspirationMetadataPa
 @router.post("/{inspiration_id}/archive", response_model=InspirationDetailEnvelope, responses={404: {"model": ErrorEnvelope}})
 def archive_inspiration_item(inspiration_id: str):
     return archive_inspiration(inspiration_id)
+
+
+@router.post(
+    "/{inspiration_id}/analyze",
+    response_model=InspirationDetailEnvelope,
+    responses={404: {"model": ErrorEnvelope}, 500: {"model": ErrorEnvelope}, 502: {"model": ErrorEnvelope}, 503: {"model": ErrorEnvelope}},
+)
+def analyze_inspiration_item(inspiration_id: str):
+    return analyze_inspiration(inspiration_id)
 
 
 @router.delete("/{inspiration_id}", status_code=204, responses={404: {"model": ErrorEnvelope}, 409: {"model": ErrorEnvelope}})

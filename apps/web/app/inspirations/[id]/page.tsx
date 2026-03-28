@@ -56,6 +56,21 @@ export default async function InspirationDetailPage({
                 <strong>Notes:</strong> {item.notes}
               </div>
             ) : null}
+            {item.analysis_summary ? (
+              <div className="stack">
+                <div>
+                  <strong>AI summary:</strong> {item.analysis_summary}
+                </div>
+                <div>
+                  <strong>AI tags:</strong> {item.analysis_tags.join(", ")}
+                </div>
+                {item.analyzed_at ? (
+                  <div>
+                    <strong>Analyzed at:</strong> {new Date(item.analyzed_at).toLocaleString()}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             </div>
           </section>
           <InspirationActions item={item} />

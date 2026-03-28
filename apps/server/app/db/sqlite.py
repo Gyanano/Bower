@@ -22,6 +22,8 @@ def initialize_database() -> None:
                 title TEXT NULL,
                 notes TEXT NULL,
                 source_url TEXT NULL,
+                analysis_summary TEXT NULL,
+                analysis_tags_json TEXT NULL,
                 status TEXT NOT NULL DEFAULT 'active',
                 original_filename TEXT NOT NULL,
                 mime_type TEXT NOT NULL,
@@ -29,6 +31,7 @@ def initialize_database() -> None:
                 storage_key TEXT NOT NULL UNIQUE,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL DEFAULT '',
+                analyzed_at TEXT NULL,
                 archived_at TEXT NULL
             )
             """
@@ -42,6 +45,12 @@ def initialize_database() -> None:
         if "updated_at" not in columns:
             connection.execute("ALTER TABLE inspirations ADD COLUMN updated_at TEXT NOT NULL DEFAULT ''")
             connection.execute("UPDATE inspirations SET updated_at = created_at WHERE updated_at = ''")
+        if "analysis_summary" not in columns:
+            connection.execute("ALTER TABLE inspirations ADD COLUMN analysis_summary TEXT NULL")
+        if "analysis_tags_json" not in columns:
+            connection.execute("ALTER TABLE inspirations ADD COLUMN analysis_tags_json TEXT NULL")
+        if "analyzed_at" not in columns:
+            connection.execute("ALTER TABLE inspirations ADD COLUMN analyzed_at TEXT NULL")
         if "archived_at" not in columns:
             connection.execute("ALTER TABLE inspirations ADD COLUMN archived_at TEXT NULL")
 

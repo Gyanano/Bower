@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.db import sqlite
 from app.main import app
+from app.services import image_analysis
 from app.services import inspirations as inspiration_service
 from app.storage import local_files
 
@@ -156,6 +157,58 @@ def test_patch_archive_and_delete_flows(client: TestClient):
     assert deleted.status_code == 204
     assert not stored_file.exists()
     assert client.get(f"/api/v1/inspirations/{inspiration_id}").status_code == 404
+
+
+def test_analyze_flow_persists_summary_tags_and_timestamp(client: TestClient, monkeypatch):
+    create_response = client.post(
+        "/api/v1/inspirations",
+        data={"title": "Reference"},
+        files={"file": ("sample.png", PNG_BYTES, "image/png")},
+    )
+    inspiration_id = create_response.json()["data"]["id"]
+
+    def fake_analyze_image(*, payload: bytes, mime_type: str):
+        assert payload == PNG_BYTES
+        assert mime_type == "image/png"
+        return ("Soft neutral interior with warm wood accents.", ["interior", "warm tones", "wood", "minimal"])
+
+    monkeypatch.setattr(image_analysis, "analyze_image", fake_analyze_image)
+    monkeypatch.setattr(inspiration_service, "analyze_image", fake_analyze_image)
+
+    response = client.post(f"/api/v1/inspirations/{inspiration_id}/analyze")
+
+    assert response.status_code == 200
+    analyzed = response.json()["data"]
+    assert analyzed["analysis_summary"] == "Soft neutral interior with warm wood accents."
+    assert analyzed["analysis_tags"] == ["interior", "warm tones", "wood", "minimal"]
+    assert analyzed["analyzed_at"] is not None
+    assert analyzed["updated_at"] == analyzed["analyzed_at"]
+
+    detail = client.get(f"/api/v1/inspirations/{inspiration_id}")
+
+    assert detail.status_code == 200
+    assert detail.json()["data"]["analysis_summary"] == analyzed["analysis_summary"]
+    assert detail.json()["data"]["analysis_tags"] == analyzed["analysis_tags"]
+    assert detail.json()["data"]["analyzed_at"] == analyzed["analyzed_at"]
+
+
+def test_analyze_requires_configured_provider(client: TestClient, monkeypatch):
+    create_response = client.post(
+        "/api/v1/inspirations",
+        files={"file": ("sample.png", PNG_BYTES, "image/png")},
+    )
+    inspiration_id = create_response.json()["data"]["id"]
+
+    monkeypatch.delenv("BOWER_AI_PROVIDER", raising=False)
+    monkeypatch.delenv("BOWER_OPENAI_API_KEY", raising=False)
+
+    response = client.post(f"/api/v1/inspirations/{inspiration_id}/analyze")
+
+    assert response.status_code == 503
+    assert response.json()["error"] == {
+        "code": "AI_PROVIDER_NOT_CONFIGURED",
+        "message": "AI analysis provider is not configured",
+    }
 
 
 def test_delete_requires_archived_status_and_patch_requires_fields(client: TestClient):

@@ -12,8 +12,11 @@ export interface InspirationListItem {
 export interface InspirationDetail extends InspirationListItem {
   notes: string | null;
   source_url: string | null;
+  analysis_summary: string | null;
+  analysis_tags: string[];
   storage_key: string;
   file_url: string;
+  analyzed_at: string | null;
   archived_at: string | null;
 }
 
@@ -107,6 +110,12 @@ export async function updateInspiration(id: string, payload: InspirationMetadata
 
 export async function archiveInspiration(id: string) {
   return apiFetch<{ data: InspirationDetail }>(`/inspirations/${id}/archive`, {
+    method: "POST",
+  });
+}
+
+export async function analyzeInspiration(id: string) {
+  return apiFetch<{ data: InspirationDetail }>(`/inspirations/${id}/analyze`, {
     method: "POST",
   });
 }

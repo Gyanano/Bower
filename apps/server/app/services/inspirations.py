@@ -1,4 +1,5 @@
 import hashlib
+import json
 import mimetypes
 import os
 from datetime import datetime, timezone
@@ -19,6 +20,7 @@ from app.schemas.inspiration import (
     InspirationMetadataPatch,
     PaginationMeta,
 )
+from app.services.image_analysis import analyze_image
 from app.storage.local_files import MAX_FILE_SIZE_BYTES, STORE_DIR, persist_upload
 
 ALLOWED_MIME_TYPES = {"image/png", "image/jpeg", "image/webp"}
@@ -62,6 +64,8 @@ def _row_to_record(row) -> InspirationRecord:
         title=row["title"],
         notes=row["notes"],
         source_url=row["source_url"],
+        analysis_summary=row["analysis_summary"],
+        analysis_tags_json=row["analysis_tags_json"],
         status=row["status"],
         original_filename=row["original_filename"],
         mime_type=row["mime_type"],
@@ -69,8 +73,24 @@ def _row_to_record(row) -> InspirationRecord:
         storage_key=row["storage_key"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
+        analyzed_at=row["analyzed_at"],
         archived_at=row["archived_at"],
     )
+
+
+def _parse_analysis_tags(raw_tags: str | None) -> list[str]:
+    if not raw_tags:
+        return []
+
+    try:
+        parsed = json.loads(raw_tags)
+    except json.JSONDecodeError:
+        return []
+
+    if not isinstance(parsed, list):
+        return []
+
+    return [str(tag).strip() for tag in parsed if str(tag).strip()]
 
 
 def _detail_payload(record: InspirationRecord) -> dict:
@@ -79,6 +99,8 @@ def _detail_payload(record: InspirationRecord) -> dict:
         "title": record.title,
         "notes": record.notes,
         "source_url": record.source_url,
+        "analysis_summary": record.analysis_summary,
+        "analysis_tags": _parse_analysis_tags(record.analysis_tags_json),
         "status": record.status,
         "original_filename": record.original_filename,
         "mime_type": record.mime_type,
@@ -86,6 +108,7 @@ def _detail_payload(record: InspirationRecord) -> dict:
         "storage_key": record.storage_key,
         "created_at": record.created_at,
         "updated_at": record.updated_at,
+        "analyzed_at": record.analyzed_at,
         "archived_at": record.archived_at,
         "file_url": f"/api/v1/inspirations/{record.id}/file",
     }
@@ -126,12 +149,15 @@ async def create_inspiration(
         title=_normalize_optional_text(title),
         notes=_normalize_optional_text(notes),
         source_url=_normalize_optional_text(source_url),
+        analysis_summary=None,
+        analysis_tags_json=None,
         original_filename=Path(file.filename or "upload").name,
         mime_type=detected_mime_type,
         file_size_bytes=len(payload),
         storage_key=persisted,
         created_at=created_at,
         updated_at=updated_at,
+        analyzed_at=None,
         status="active",
         archived_at=None,
     )
@@ -145,6 +171,8 @@ async def create_inspiration(
                     title,
                     notes,
                     source_url,
+                    analysis_summary,
+                    analysis_tags_json,
                     original_filename,
                     mime_type,
                     file_size_bytes,
@@ -152,14 +180,17 @@ async def create_inspiration(
                     created_at,
                     updated_at,
                     status,
+                    analyzed_at,
                     archived_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     record.id,
                     record.title,
                     record.notes,
                     record.source_url,
+                    record.analysis_summary,
+                    record.analysis_tags_json,
                     record.original_filename,
                     record.mime_type,
                     record.file_size_bytes,
@@ -167,6 +198,7 @@ async def create_inspiration(
                     record.created_at,
                     record.updated_at,
                     record.status,
+                    record.analyzed_at,
                     record.archived_at,
                 ),
             )
@@ -259,6 +291,35 @@ def archive_inspiration(inspiration_id: str) -> InspirationDetailEnvelope:
             WHERE id = ?
             """,
             (archived_at, archived_at, inspiration_id),
+        )
+        connection.commit()
+
+    return get_inspiration_by_id(inspiration_id)
+
+
+def analyze_inspiration(inspiration_id: str) -> InspirationDetailEnvelope:
+    record = _fetch_record(inspiration_id)
+    stored_path = STORE_DIR / Path(record.storage_key).relative_to("store")
+
+    if not stored_path.exists():
+        raise _error(500, "SAVE_FAILED", "Stored file is missing from local storage")
+
+    try:
+        payload = stored_path.read_bytes()
+    except OSError as exc:
+        raise _error(500, "SAVE_FAILED", f"Failed to read stored file locally: {exc}") from exc
+
+    summary, tags = analyze_image(payload=payload, mime_type=record.mime_type)
+    analyzed_at = _utc_now()
+
+    with get_connection() as connection:
+        connection.execute(
+            """
+            UPDATE inspirations
+            SET analysis_summary = ?, analysis_tags_json = ?, analyzed_at = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (summary, json.dumps(tags), analyzed_at, analyzed_at, inspiration_id),
         )
         connection.commit()
 

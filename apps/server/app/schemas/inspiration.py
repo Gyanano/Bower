@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class InspirationBase(BaseModel):
@@ -21,8 +21,11 @@ class InspirationListItem(InspirationBase):
 class InspirationDetail(InspirationBase):
     notes: str | None = None
     source_url: str | None = None
+    analysis_summary: str | None = None
+    analysis_tags: list[str] = Field(default_factory=list)
     storage_key: str
     file_url: str
+    analyzed_at: str | None = None
     archived_at: str | None = None
 
 

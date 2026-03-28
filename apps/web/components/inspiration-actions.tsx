@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  analyzeInspiration,
   archiveInspiration,
   deleteInspiration,
   getApiErrorMessage,
@@ -18,6 +19,7 @@ export function InspirationActions({ item }: { item: InspirationDetail }) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isArchiving, setIsArchiving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDeleteConfirming, setIsDeleteConfirming] = useState(false);
@@ -51,6 +53,22 @@ export function InspirationActions({ item }: { item: InspirationDetail }) {
       setError(getApiErrorMessage(submissionError));
     } finally {
       setIsArchiving(false);
+    }
+  }
+
+  async function handleAnalyze() {
+    setError(null);
+    setSuccess(null);
+    setIsAnalyzing(true);
+
+    try {
+      await analyzeInspiration(item.id);
+      setSuccess(item.analyzed_at ? "Analysis refreshed." : "Analysis saved.");
+      router.refresh();
+    } catch (submissionError) {
+      setError(getApiErrorMessage(submissionError));
+    } finally {
+      setIsAnalyzing(false);
     }
   }
 
@@ -112,10 +130,25 @@ export function InspirationActions({ item }: { item: InspirationDetail }) {
           <textarea className="textarea" onChange={(event) => setNotes(event.target.value)} value={notes} />
         </label>
 
-        <button className="button" disabled={isSaving || isArchiving || isDeleting} type="submit">
+        <button className="button" disabled={isSaving || isAnalyzing || isArchiving || isDeleting} type="submit">
           {isSaving ? "Saving..." : "Save metadata"}
         </button>
       </form>
+
+      <div className="stack">
+        <div>
+          <h2>AI analysis</h2>
+          <p className="muted">
+            {item.analyzed_at
+              ? `Last analyzed ${new Date(item.analyzed_at).toLocaleString()}.`
+              : "Generate a summary and tags for this inspiration image."}
+          </p>
+        </div>
+
+        <button className="button button-secondary" disabled={isSaving || isAnalyzing || isArchiving || isDeleting} onClick={handleAnalyze} type="button">
+          {isAnalyzing ? "Analyzing..." : item.analyzed_at ? "Re-run analysis" : "Analyze image"}
+        </button>
+      </div>
 
       <div className="stack">
         <div>
@@ -128,7 +161,7 @@ export function InspirationActions({ item }: { item: InspirationDetail }) {
         </div>
 
         {item.status === "active" ? (
-          <button className="button button-secondary" disabled={isSaving || isArchiving || isDeleting} onClick={handleArchive} type="button">
+          <button className="button button-secondary" disabled={isSaving || isAnalyzing || isArchiving || isDeleting} onClick={handleArchive} type="button">
             {isArchiving ? "Archiving..." : "Archive inspiration"}
           </button>
         ) : (
@@ -138,16 +171,16 @@ export function InspirationActions({ item }: { item: InspirationDetail }) {
               <div className="stack">
                 <p className="error">Delete this archived inspiration and remove its local file permanently?</p>
                 <div className="button-row">
-                  <button className="button button-danger" disabled={isSaving || isArchiving || isDeleting} onClick={handleDelete} type="button">
+                  <button className="button button-danger" disabled={isSaving || isAnalyzing || isArchiving || isDeleting} onClick={handleDelete} type="button">
                     {isDeleting ? "Deleting..." : "Confirm permanent delete"}
                   </button>
-                  <button className="button button-secondary" disabled={isSaving || isArchiving || isDeleting} onClick={handleDeleteCancel} type="button">
+                  <button className="button button-secondary" disabled={isSaving || isAnalyzing || isArchiving || isDeleting} onClick={handleDeleteCancel} type="button">
                     Cancel
                   </button>
                 </div>
               </div>
             ) : (
-              <button className="button button-danger" disabled={isSaving || isArchiving || isDeleting} onClick={handleDeletePrompt} type="button">
+              <button className="button button-danger" disabled={isSaving || isAnalyzing || isArchiving || isDeleting} onClick={handleDeletePrompt} type="button">
                 Delete permanently
               </button>
             )}
