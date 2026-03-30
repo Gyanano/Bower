@@ -13,3 +13,5 @@ __pycache__/
 .venv/
 venv/
 data/
+/test.png
+/apps/web/tsconfig.tsbuildinfo

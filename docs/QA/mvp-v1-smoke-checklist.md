@@ -2,12 +2,13 @@
 
 ## Start
 
-1. Edit `run-relay-server.cmd`
-2. Or edit `run-openai-server.cmd` if testing against official OpenAI
-3. Paste your real API key into the chosen script or set it in your local shell environment
-4. Run your chosen backend script
-5. Run `run-web.cmd`
-6. Open `http://127.0.0.1:3000`
+1. Copy the values you need from `apps/server/.env.example` into your local shell environment
+2. Set `BOWER_AI_PROVIDER=openai`
+3. Set `BOWER_OPENAI_API_KEY` to a real key if you want to test AI analysis
+4. Optionally set `BOWER_OPENAI_MODEL` or `BOWER_OPENAI_BASE_URL` for your chosen OpenAI-compatible endpoint
+5. Run `npm run dev:server`
+6. In a second terminal, run `npm run dev:web`
+7. Open `http://127.0.0.1:3000`
 
 ## Phase 2A manual smoke
 

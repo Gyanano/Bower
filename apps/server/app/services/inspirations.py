@@ -4,6 +4,7 @@ import mimetypes
 import os
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
 
 from fastapi import UploadFile
@@ -52,6 +53,30 @@ def _normalize_optional_text(value: str | None) -> str | None:
         return None
     stripped = value.strip()
     return stripped or None
+
+
+def _normalize_source_url(value: str | None) -> str | None:
+    normalized = _normalize_optional_text(value)
+    if normalized is None:
+        return None
+
+    if any(character.isspace() for character in normalized):
+        raise _error(422, "INVALID_SOURCE_URL", "Source URL must be a valid http or https URL")
+
+    try:
+        parsed = urlsplit(normalized)
+    except ValueError as exc:
+        raise _error(422, "INVALID_SOURCE_URL", "Source URL must be a valid http or https URL") from exc
+
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc or not parsed.hostname:
+        raise _error(422, "INVALID_SOURCE_URL", "Source URL must be a valid http or https URL")
+
+    try:
+        _ = parsed.port
+    except ValueError as exc:
+        raise _error(422, "INVALID_SOURCE_URL", "Source URL must be a valid http or https URL") from exc
+
+    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, parsed.query, parsed.fragment))
 
 
 def _error(status_code: int, code: str, message: str) -> AppError:
@@ -134,6 +159,7 @@ async def create_inspiration(
     if len(payload) > MAX_FILE_SIZE_BYTES:
         raise _error(413, "FILE_TOO_LARGE", f"File exceeds {MAX_FILE_SIZE_BYTES} bytes")
 
+    normalized_source_url = _normalize_source_url(source_url)
     created_at = _utc_now()
     updated_at = created_at
     content_hash = hashlib.sha256(payload).hexdigest()
@@ -148,7 +174,7 @@ async def create_inspiration(
         id=_build_id(),
         title=_normalize_optional_text(title),
         notes=_normalize_optional_text(notes),
-        source_url=_normalize_optional_text(source_url),
+        source_url=normalized_source_url,
         analysis_summary=None,
         analysis_tags_json=None,
         original_filename=Path(file.filename or "upload").name,
@@ -206,7 +232,10 @@ async def create_inspiration(
     except Exception as exc:
         stored_path = STORE_DIR / Path(record.storage_key).relative_to("store")
         if stored_path.exists():
-            os.remove(stored_path)
+            try:
+                os.remove(stored_path)
+            except OSError:
+                pass
         raise _error(500, "SAVE_FAILED", f"Failed to write metadata: {exc}") from exc
 
     return InspirationDetailEnvelope(data=InspirationDetail.model_validate(_detail_payload(record)))
@@ -256,7 +285,10 @@ def update_inspiration_metadata(inspiration_id: str, patch: InspirationMetadataP
 
     updates: dict[str, str | None] = {}
     for field_name in patch.model_fields_set:
-        updates[field_name] = _normalize_optional_text(getattr(patch, field_name))
+        if field_name == "source_url":
+            updates[field_name] = _normalize_source_url(getattr(patch, field_name))
+        else:
+            updates[field_name] = _normalize_optional_text(getattr(patch, field_name))
 
     updates["updated_at"] = _utc_now()
 

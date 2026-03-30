@@ -1,11 +1,8 @@
 import Link from "next/link";
 import { getApiErrorMessage, getInspirations } from "@/lib/api";
+import { formatUtcTimestamp } from "@/lib/format";
 
-export default async function InspirationsPage({
-  searchParams,
-}: {
-  searchParams?: Promise<{ status?: string }>;
-}) {
+export default async function InspirationsPage({ searchParams }: PageProps<"/inspirations">) {
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const status = resolvedSearchParams?.status === "archived" ? "archived" : "active";
   let result: Awaited<ReturnType<typeof getInspirations>>;
@@ -58,7 +55,7 @@ export default async function InspirationsPage({
                 <div className="muted">{item.original_filename}</div>
                 <div className="muted">{item.mime_type}</div>
                 <div className="muted">Status: {item.status}</div>
-                <div className="muted">{new Date(item.created_at).toLocaleString()}</div>
+                <div className="muted">{formatUtcTimestamp(item.created_at)}</div>
               </Link>
             ))}
           </div>

@@ -26,8 +26,7 @@ This confirms the current MVP branch can complete the first end-to-end local-fir
 
 ## Notes
 
-- A hydration warning was observed for the localized `analyzed_at` display string.
-- This does not block the core analyze flow, but the timestamp rendering should be normalized in a follow-up UI fix.
+- Startup now uses shell environment variables plus `npm run dev:server` / `npm run dev:web` rather than repo-local `.cmd` launchers.
 
 ## Conclusion
 

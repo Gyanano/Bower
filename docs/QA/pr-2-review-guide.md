@@ -51,12 +51,6 @@ Please focus on these questions first:
 - `npm --prefix apps/web run build`
 - manual OpenAI smoke confirmed persisted AI summary/tags on a real image
 
-## Known non-blocking issue
-
-- localized `analyzed_at` rendering can trigger a hydration warning
-
-This should be called out if seen, but it is currently considered follow-up polish rather than a blocker to understanding the PR.
-
 ## Out of scope for this PR
 
 - semantic search / embeddings

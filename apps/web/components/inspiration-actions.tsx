@@ -10,6 +10,7 @@ import {
   type InspirationDetail,
   updateInspiration,
 } from "@/lib/api";
+import { formatUtcTimestamp } from "@/lib/format";
 
 export function InspirationActions({ item }: { item: InspirationDetail }) {
   const router = useRouter();
@@ -140,7 +141,7 @@ export function InspirationActions({ item }: { item: InspirationDetail }) {
           <h2>AI analysis</h2>
           <p className="muted">
             {item.analyzed_at
-              ? `Last analyzed ${new Date(item.analyzed_at).toLocaleString()}.`
+              ? `Last analyzed ${formatUtcTimestamp(item.analyzed_at)}.`
               : "Generate a summary and tags for this inspiration image."}
           </p>
         </div>
@@ -155,7 +156,7 @@ export function InspirationActions({ item }: { item: InspirationDetail }) {
           <h2>{item.status === "archived" ? "Archived inspiration" : "Archive inspiration"}</h2>
           <p className="muted">
             {item.status === "archived"
-              ? `Archived ${item.archived_at ? new Date(item.archived_at).toLocaleString() : "recently"}.`
+              ? `Archived ${item.archived_at ? formatUtcTimestamp(item.archived_at) : "recently"}.`
               : "Move this inspiration out of the active list. Unarchive is not included in this pass."}
           </p>
         </div>

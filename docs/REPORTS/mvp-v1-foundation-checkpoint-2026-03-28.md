@@ -37,7 +37,7 @@ This is not a feature-complete MVP yet, but it establishes the first end-to-end 
 ### Developer workflow
 
 - feature branch created and pushed: `feature/mvp-v1-foundation`
-- local npm-based frontend run path added for easier Windows testing
+- cross-platform local startup uses shell environment variables plus `npm run dev:server` and `npm run dev:web`
 
 ## Validation Evidence
 
@@ -67,10 +67,6 @@ Manual smoke was performed against the local app flow and confirmed:
 
 This checkpoint does **not** yet include:
 
-- AI analysis
-- tags / summary generation
-- metadata editing
-- archive / delete flows
 - search / filtering
 - auth / sync / cloud storage
 - collections, components, tokens, MCP, or CLI features

@@ -159,6 +159,90 @@ def test_patch_archive_and_delete_flows(client: TestClient):
     assert client.get(f"/api/v1/inspirations/{inspiration_id}").status_code == 404
 
 
+def test_create_rejects_unsafe_source_url(client: TestClient):
+    before_paths = list(inspiration_service.STORE_DIR.rglob("*")) if inspiration_service.STORE_DIR.exists() else []
+
+    response = client.post(
+        "/api/v1/inspirations",
+        data={"title": "Moodboard", "source_url": "javascript:alert(1)"},
+        files={"file": ("sample.png", PNG_BYTES, "image/png")},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"] == {
+        "code": "INVALID_SOURCE_URL",
+        "message": "Source URL must be a valid http or https URL",
+    }
+    after_paths = list(inspiration_service.STORE_DIR.rglob("*")) if inspiration_service.STORE_DIR.exists() else []
+    assert after_paths == before_paths
+
+
+def test_create_rejects_whitespace_in_source_url_host(client: TestClient):
+    response = client.post(
+        "/api/v1/inspirations",
+        data={"title": "Moodboard", "source_url": "https://exa mple.com/reference"},
+        files={"file": ("sample.png", PNG_BYTES, "image/png")},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"] == {
+        "code": "INVALID_SOURCE_URL",
+        "message": "Source URL must be a valid http or https URL",
+    }
+
+
+def test_create_rejects_invalid_source_url_port(client: TestClient):
+    response = client.post(
+        "/api/v1/inspirations",
+        data={"title": "Moodboard", "source_url": "https://example.com:99999/reference"},
+        files={"file": ("sample.png", PNG_BYTES, "image/png")},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"] == {
+        "code": "INVALID_SOURCE_URL",
+        "message": "Source URL must be a valid http or https URL",
+    }
+
+
+def test_patch_rejects_unsafe_source_url(client: TestClient):
+    created = client.post(
+        "/api/v1/inspirations",
+        data={"title": "Original"},
+        files={"file": ("sample.png", PNG_BYTES, "image/png")},
+    )
+
+    response = client.patch(
+        f'/api/v1/inspirations/{created.json()["data"]["id"]}',
+        json={"source_url": "ftp://example.com/reference"},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"] == {
+        "code": "INVALID_SOURCE_URL",
+        "message": "Source URL must be a valid http or https URL",
+    }
+
+
+def test_patch_rejects_malformed_source_url(client: TestClient):
+    created = client.post(
+        "/api/v1/inspirations",
+        data={"title": "Original"},
+        files={"file": ("sample.png", PNG_BYTES, "image/png")},
+    )
+
+    response = client.patch(
+        f'/api/v1/inspirations/{created.json()["data"]["id"]}',
+        json={"source_url": "http://[::1"},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"] == {
+        "code": "INVALID_SOURCE_URL",
+        "message": "Source URL must be a valid http or https URL",
+    }
+
+
 def test_analyze_flow_persists_summary_tags_and_timestamp(client: TestClient, monkeypatch):
     create_response = client.post(
         "/api/v1/inspirations",
