@@ -36,6 +36,17 @@ def initialize_database() -> None:
             )
             """
         )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ai_provider_settings (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                provider TEXT NOT NULL,
+                model_id TEXT NULL,
+                api_key TEXT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
 
         columns = {
             row["name"] for row in connection.execute("PRAGMA table_info(inspirations)").fetchall()

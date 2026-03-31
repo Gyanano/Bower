@@ -1,3 +1,5 @@
+export type AIProvider = "openai" | "anthropic" | "google" | "volcengine";
+
 export interface InspirationListItem {
   id: string;
   title: string | null;
@@ -24,6 +26,23 @@ export interface InspirationMetadataPatch {
   title?: string | null;
   notes?: string | null;
   source_url?: string | null;
+}
+
+export interface AISettings {
+  provider: AIProvider | null;
+  provider_source: "stored" | "legacy_env" | null;
+  model_id: string | null;
+  has_api_key: boolean;
+  api_key_mask: string | null;
+  api_key_source: "stored" | "legacy_env" | null;
+  updated_at: string | null;
+}
+
+export interface AISettingsUpdate {
+  provider: AIProvider;
+  model_id?: string | null;
+  api_key?: string;
+  clear_api_key?: boolean;
 }
 
 interface ApiErrorEnvelope {
@@ -91,6 +110,10 @@ export async function getInspiration(id: string) {
   return apiFetch<{ data: InspirationDetail }>(`/inspirations/${id}`);
 }
 
+export async function getAiSettings() {
+  return apiFetch<{ data: AISettings }>("/settings/ai");
+}
+
 export async function createInspiration(formData: FormData) {
   return apiFetch<{ data: InspirationDetail }>("/inspirations", {
     body: formData,
@@ -117,6 +140,16 @@ export async function archiveInspiration(id: string) {
 export async function analyzeInspiration(id: string) {
   return apiFetch<{ data: InspirationDetail }>(`/inspirations/${id}/analyze`, {
     method: "POST",
+  });
+}
+
+export async function updateAiSettings(payload: AISettingsUpdate) {
+  return apiFetch<{ data: AISettings }>("/settings/ai", {
+    body: JSON.stringify(payload),
+    headers: {
+      "content-type": "application/json",
+    },
+    method: "PUT",
   });
 }
 

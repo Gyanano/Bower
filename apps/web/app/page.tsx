@@ -11,6 +11,7 @@ export default function HomePage() {
         <div className="nav">
           <Link href="/upload">Upload inspiration</Link>
           <Link href="/inspirations">Browse saved inspirations</Link>
+          <Link href="/settings/ai">Configure AI provider</Link>
         </div>
       </section>
     </main>

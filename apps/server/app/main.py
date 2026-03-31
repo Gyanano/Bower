@@ -5,6 +5,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes.inspirations import router as inspirations_router
+from app.api.routes.settings_ai import router as settings_ai_router
 from app.db.sqlite import initialize_database
 from app.errors import AppError, app_error_handler, request_validation_error_handler
 
@@ -39,3 +40,4 @@ def healthcheck():
 
 
 app.include_router(inspirations_router, prefix="/api/v1")
+app.include_router(settings_ai_router, prefix="/api/v1")

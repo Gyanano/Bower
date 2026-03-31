@@ -2,16 +2,24 @@
 
 ## Start
 
-1. Copy the values you need from `apps/server/.env.example` into your local shell environment
-2. Set `BOWER_AI_PROVIDER=openai`
-3. Set `BOWER_OPENAI_API_KEY` to a real key if you want to test AI analysis
-4. Optionally set `BOWER_OPENAI_MODEL` or `BOWER_OPENAI_BASE_URL` for your chosen OpenAI-compatible endpoint
-5. Run `npm run dev:server`
-6. In a second terminal, run `npm run dev:web`
-7. Open `http://127.0.0.1:3000`
+1. Run `npm run dev:server`
+2. In a second terminal, run `npm run dev:web`
+3. Open `http://127.0.0.1:3000/settings/ai`
+4. Select one provider: OpenAI, Anthropic, Google AI Studio, or ByteDance Volcano / Ark
+5. Enter an API key
+6. Enter `Model / endpoint ID` if needed for your chosen provider
+7. Save settings
+8. Refresh `/settings/ai` and confirm the API key remains masked rather than displayed in full
+
+Optional legacy fallback:
+
+- if you are intentionally testing the old path, set `BOWER_AI_PROVIDER` plus the provider-specific API key/model env vars before starting the backend
 
 ## Phase 2A manual smoke
 
+- [ ] Open `http://127.0.0.1:3000/settings/ai`
+- [ ] Save a provider configuration successfully
+- [ ] Refresh and confirm the selected provider and masked API key state persist
 - [ ] Open `http://127.0.0.1:3000/upload`
 - [ ] Upload any local `.png`, `.jpg`, or `.webp` test image
 - [ ] Open `/inspirations`
@@ -38,6 +46,8 @@
 
 ## Failure-path smoke
 
+- [ ] Open `/settings/ai`, clear the API key, save, and confirm the key state is removed
+- [ ] Open an inspiration detail page and confirm `Analyze` fails with a clear provider-not-configured message when no key is present
 - [ ] Try uploading a `.txt` file and confirm it is rejected
 - [ ] Stop the backend and open `/inspirations`
 - [ ] Confirm the frontend shows a failure state instead of crashing
@@ -48,4 +58,4 @@ Paste back:
 
 1. the full page error message
 2. the relevant backend terminal output
-3. the model name used in your chosen backend configuration
+3. the provider plus `Model / endpoint ID` used in `/settings/ai`
