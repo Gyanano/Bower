@@ -124,12 +124,13 @@ def resolve_ai_provider_settings() -> ResolvedAIProviderSettings | None:
     if legacy_provider is None:
         return None
 
+    legacy_api_key = _env_first(PROVIDER_API_KEY_ENV_NAMES[legacy_provider])
     return ResolvedAIProviderSettings(
         provider=legacy_provider,
         model_id=_env_first(PROVIDER_MODEL_ENV_NAMES[legacy_provider]) or PROVIDER_DEFAULT_MODEL_IDS[legacy_provider],
-        api_key=_env_first(PROVIDER_API_KEY_ENV_NAMES[legacy_provider]),
+        api_key=legacy_api_key,
         provider_source=SOURCE_LEGACY_ENV,
-        api_key_source=SOURCE_LEGACY_ENV if _env_first(PROVIDER_API_KEY_ENV_NAMES[legacy_provider]) else None,
+        api_key_source=SOURCE_LEGACY_ENV if legacy_api_key else None,
         updated_at=None,
         legacy_openai_base_url=_normalize_optional_text(os.getenv("BOWER_OPENAI_BASE_URL"))
         if legacy_provider == "openai"

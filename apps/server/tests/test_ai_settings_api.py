@@ -1,30 +1,26 @@
-import shutil
 from pathlib import Path
-from uuid import uuid4
+from tempfile import TemporaryDirectory
 
 from fastapi.testclient import TestClient
 
 from app.db import sqlite
 from app.main import app
 
-TEST_TMP_DIR = Path.home() / ".codex" / "memories" / "bower-test-tmp"
-
 
 def _build_client(monkeypatch):
-    TEST_TMP_DIR.mkdir(parents=True, exist_ok=True)
-    temp_dir = TEST_TMP_DIR / f"case-{uuid4().hex}"
-    temp_dir.mkdir(parents=True, exist_ok=True)
+    tmp = TemporaryDirectory(ignore_cleanup_errors=True)
+    temp_dir = Path(tmp.name)
     data_dir = temp_dir / "data"
 
     monkeypatch.setattr(sqlite, "DATA_DIR", data_dir)
     monkeypatch.setattr(sqlite, "DATABASE_PATH", data_dir / "meta.db")
 
     test_client = TestClient(app)
-    return temp_dir, test_client
+    return tmp, test_client
 
 
 def test_get_ai_settings_returns_empty_state_by_default(monkeypatch):
-    temp_dir, client = _build_client(monkeypatch)
+    tmp, client = _build_client(monkeypatch)
     try:
         with client:
             response = client.get("/api/v1/settings/ai")
@@ -42,11 +38,11 @@ def test_get_ai_settings_returns_empty_state_by_default(monkeypatch):
                 }
             }
     finally:
-        shutil.rmtree(temp_dir, ignore_errors=True)
+        tmp.cleanup()
 
 
 def test_put_ai_settings_persists_and_masks_api_key(monkeypatch):
-    temp_dir, client = _build_client(monkeypatch)
+    tmp, client = _build_client(monkeypatch)
     try:
         with client:
             response = client.put(
@@ -76,11 +72,11 @@ def test_put_ai_settings_persists_and_masks_api_key(monkeypatch):
         assert row["model_id"] == "gpt-4.1-mini"
         assert row["api_key"] == "sk-test-12345678"
     finally:
-        shutil.rmtree(temp_dir, ignore_errors=True)
+        tmp.cleanup()
 
 
 def test_put_ai_settings_preserves_existing_key_for_same_provider_until_cleared(monkeypatch):
-    temp_dir, client = _build_client(monkeypatch)
+    tmp, client = _build_client(monkeypatch)
     try:
         with client:
             first_save = client.put(
@@ -124,11 +120,11 @@ def test_put_ai_settings_preserves_existing_key_for_same_provider_until_cleared(
         assert row["model_id"] == "gpt-4.1"
         assert row["api_key"] is None
     finally:
-        shutil.rmtree(temp_dir, ignore_errors=True)
+        tmp.cleanup()
 
 
 def test_put_ai_settings_switching_provider_without_new_key_does_not_reuse_old_key(monkeypatch):
-    temp_dir, client = _build_client(monkeypatch)
+    tmp, client = _build_client(monkeypatch)
     try:
         with client:
             first_save = client.put(
@@ -161,11 +157,11 @@ def test_put_ai_settings_switching_provider_without_new_key_does_not_reuse_old_k
         assert row["model_id"] == "gemini-2.5-flash"
         assert row["api_key"] is None
     finally:
-        shutil.rmtree(temp_dir, ignore_errors=True)
+        tmp.cleanup()
 
 
 def test_get_ai_settings_uses_legacy_env_fallback_when_unsaved(monkeypatch):
-    temp_dir, client = _build_client(monkeypatch)
+    tmp, client = _build_client(monkeypatch)
     monkeypatch.setenv("BOWER_AI_PROVIDER", "google-ai-studio")
     monkeypatch.setenv("BOWER_GOOGLE_API_KEY", "google-key-1234")
     monkeypatch.setenv("BOWER_GOOGLE_MODEL", "gemini-2.5-flash")
@@ -185,11 +181,11 @@ def test_get_ai_settings_uses_legacy_env_fallback_when_unsaved(monkeypatch):
             "updated_at": None,
         }
     finally:
-        shutil.rmtree(temp_dir, ignore_errors=True)
+        tmp.cleanup()
 
 
 def test_put_ai_settings_persists_legacy_env_key_when_saving_same_provider_without_new_key(monkeypatch):
-    temp_dir, client = _build_client(monkeypatch)
+    tmp, client = _build_client(monkeypatch)
     monkeypatch.setenv("BOWER_AI_PROVIDER", "google-ai-studio")
     monkeypatch.setenv("BOWER_GOOGLE_API_KEY", "google-key-1234")
     monkeypatch.setenv("BOWER_GOOGLE_MODEL", "gemini-2.5-flash")
@@ -220,11 +216,11 @@ def test_put_ai_settings_persists_legacy_env_key_when_saving_same_provider_witho
         assert row["model_id"] == "gemini-2.5-flash"
         assert row["api_key"] == "google-key-1234"
     finally:
-        shutil.rmtree(temp_dir, ignore_errors=True)
+        tmp.cleanup()
 
 
 def test_get_ai_settings_does_not_fallback_to_legacy_env_after_key_is_cleared(monkeypatch):
-    temp_dir, client = _build_client(monkeypatch)
+    tmp, client = _build_client(monkeypatch)
     monkeypatch.setenv("BOWER_AI_PROVIDER", "openai")
     monkeypatch.setenv("BOWER_OPENAI_API_KEY", "legacy-openai-key-9999")
     monkeypatch.setenv("BOWER_OPENAI_MODEL", "gpt-4.1-mini")
@@ -258,4 +254,4 @@ def test_get_ai_settings_does_not_fallback_to_legacy_env_after_key_is_cleared(mo
         assert fetched.json()["data"]["api_key_mask"] is None
         assert fetched.json()["data"]["api_key_source"] is None
     finally:
-        shutil.rmtree(temp_dir, ignore_errors=True)
+        tmp.cleanup()

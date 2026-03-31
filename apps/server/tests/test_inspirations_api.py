@@ -1,6 +1,5 @@
-import shutil
 from pathlib import Path
-from uuid import uuid4
+from tempfile import TemporaryDirectory
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,27 +12,22 @@ from app.storage import local_files
 
 PNG_BYTES = b"\x89PNG\r\n\x1a\nminimal-png-payload"
 TEXT_BYTES = b"plain text payload"
-TEST_TMP_DIR = Path.home() / ".codex" / "memories" / "bower-test-tmp"
 
 
 @pytest.fixture()
 def client(monkeypatch):
-    TEST_TMP_DIR.mkdir(parents=True, exist_ok=True)
-    temp_dir = TEST_TMP_DIR / f"case-{uuid4().hex}"
-    temp_dir.mkdir(parents=True, exist_ok=True)
-    data_dir = temp_dir / "data"
-    store_dir = data_dir / "store"
+    with TemporaryDirectory(ignore_cleanup_errors=True) as temp_dir_name:
+        temp_dir = Path(temp_dir_name)
+        data_dir = temp_dir / "data"
+        store_dir = data_dir / "store"
 
-    monkeypatch.setattr(sqlite, "DATA_DIR", data_dir)
-    monkeypatch.setattr(sqlite, "DATABASE_PATH", data_dir / "meta.db")
-    monkeypatch.setattr(local_files, "STORE_DIR", store_dir)
-    monkeypatch.setattr(inspiration_service, "STORE_DIR", store_dir)
+        monkeypatch.setattr(sqlite, "DATA_DIR", data_dir)
+        monkeypatch.setattr(sqlite, "DATABASE_PATH", data_dir / "meta.db")
+        monkeypatch.setattr(local_files, "STORE_DIR", store_dir)
+        monkeypatch.setattr(inspiration_service, "STORE_DIR", store_dir)
 
-    try:
         with TestClient(app) as test_client:
             yield test_client
-    finally:
-        shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 def test_upload_list_detail_and_inline_file_flow(client: TestClient):
