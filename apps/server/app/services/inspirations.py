@@ -10,7 +10,7 @@ from uuid import uuid4
 from fastapi import UploadFile
 from fastapi.responses import FileResponse
 
-from app.db.sqlite import get_connection
+from app.db.sqlite import DEFAULT_BOARDS, get_connection
 from app.errors import AppError
 from app.models.inspiration import InspirationRecord
 from app.schemas.inspiration import (
@@ -83,14 +83,51 @@ def _error(status_code: int, code: str, message: str) -> AppError:
     return AppError(status_code=status_code, code=code, message=message)
 
 
+def _parse_json_list(raw_items: str | None) -> list[str]:
+    if not raw_items:
+        return []
+
+    try:
+        parsed = json.loads(raw_items)
+    except json.JSONDecodeError:
+        return []
+
+    if not isinstance(parsed, list):
+        return []
+
+    return [str(item).strip() for item in parsed if str(item).strip()]
+
+
+def _default_board_id() -> str:
+    return DEFAULT_BOARDS[0][0]
+
+
+def _validate_board_id(board_id: str | None) -> str:
+    candidate = _normalize_optional_text(board_id) or _default_board_id()
+    with get_connection() as connection:
+        row = connection.execute("SELECT id FROM boards WHERE id = ?", (candidate,)).fetchone()
+    if row is None:
+        raise _error(422, "BOARD_NOT_FOUND", "Selected board does not exist")
+    return candidate
+
+
 def _row_to_record(row) -> InspirationRecord:
     return InspirationRecord(
         id=row["id"],
+        board_id=row["board_id"],
+        board_name=row["board_name"] if "board_name" in row.keys() else None,
         title=row["title"],
         notes=row["notes"],
         source_url=row["source_url"],
         analysis_summary=row["analysis_summary"],
         analysis_tags_json=row["analysis_tags_json"],
+        analysis_prompt_en=row["analysis_prompt_en"],
+        analysis_prompt_zh=row["analysis_prompt_zh"],
+        analysis_tags_en_json=row["analysis_tags_en_json"],
+        analysis_tags_zh_json=row["analysis_tags_zh_json"],
+        analysis_colors_json=row["analysis_colors_json"],
+        analysis_status=row["analysis_status"],
+        analysis_error=row["analysis_error"],
         status=row["status"],
         original_filename=row["original_filename"],
         mime_type=row["mime_type"],
@@ -103,29 +140,24 @@ def _row_to_record(row) -> InspirationRecord:
     )
 
 
-def _parse_analysis_tags(raw_tags: str | None) -> list[str]:
-    if not raw_tags:
-        return []
-
-    try:
-        parsed = json.loads(raw_tags)
-    except json.JSONDecodeError:
-        return []
-
-    if not isinstance(parsed, list):
-        return []
-
-    return [str(tag).strip() for tag in parsed if str(tag).strip()]
-
-
-def _detail_payload(record: InspirationRecord) -> dict:
+def _detail_payload(record: InspirationRecord) -> dict[str, object]:
+    analysis_tags_en = _parse_json_list(record.analysis_tags_en_json)
     return {
         "id": record.id,
+        "board_id": record.board_id,
+        "board_name": record.board_name,
         "title": record.title,
         "notes": record.notes,
         "source_url": record.source_url,
         "analysis_summary": record.analysis_summary,
-        "analysis_tags": _parse_analysis_tags(record.analysis_tags_json),
+        "analysis_tags": analysis_tags_en,
+        "analysis_prompt_en": record.analysis_prompt_en,
+        "analysis_prompt_zh": record.analysis_prompt_zh,
+        "analysis_tags_en": analysis_tags_en,
+        "analysis_tags_zh": _parse_json_list(record.analysis_tags_zh_json),
+        "analysis_colors": _parse_json_list(record.analysis_colors_json),
+        "analysis_status": record.analysis_status,
+        "analysis_error": record.analysis_error,
         "status": record.status,
         "original_filename": record.original_filename,
         "mime_type": record.mime_type,
@@ -137,6 +169,14 @@ def _detail_payload(record: InspirationRecord) -> dict:
         "archived_at": record.archived_at,
         "file_url": f"/api/v1/inspirations/{record.id}/file",
     }
+
+
+def _fetch_record_query() -> str:
+    return """
+        SELECT inspirations.*, boards.name AS board_name
+        FROM inspirations
+        LEFT JOIN boards ON boards.id = inspirations.board_id
+    """
 
 
 async def create_inspiration(
@@ -172,11 +212,21 @@ async def create_inspiration(
 
     record = InspirationRecord(
         id=_build_id(),
+        board_id=_default_board_id(),
+        board_name=None,
         title=_normalize_optional_text(title),
         notes=_normalize_optional_text(notes),
         source_url=normalized_source_url,
         analysis_summary=None,
         analysis_tags_json=None,
+        analysis_prompt_en=None,
+        analysis_prompt_zh=None,
+        analysis_tags_en_json=None,
+        analysis_tags_zh_json=None,
+        analysis_colors_json=None,
+        analysis_status="idle",
+        analysis_error=None,
+        status="active",
         original_filename=Path(file.filename or "upload").name,
         mime_type=detected_mime_type,
         file_size_bytes=len(payload),
@@ -184,7 +234,6 @@ async def create_inspiration(
         created_at=created_at,
         updated_at=updated_at,
         analyzed_at=None,
-        status="active",
         archived_at=None,
     )
 
@@ -194,11 +243,19 @@ async def create_inspiration(
                 """
                 INSERT INTO inspirations (
                     id,
+                    board_id,
                     title,
                     notes,
                     source_url,
                     analysis_summary,
                     analysis_tags_json,
+                    analysis_prompt_en,
+                    analysis_prompt_zh,
+                    analysis_tags_en_json,
+                    analysis_tags_zh_json,
+                    analysis_colors_json,
+                    analysis_status,
+                    analysis_error,
                     original_filename,
                     mime_type,
                     file_size_bytes,
@@ -208,15 +265,23 @@ async def create_inspiration(
                     status,
                     analyzed_at,
                     archived_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     record.id,
+                    record.board_id,
                     record.title,
                     record.notes,
                     record.source_url,
                     record.analysis_summary,
                     record.analysis_tags_json,
+                    record.analysis_prompt_en,
+                    record.analysis_prompt_zh,
+                    record.analysis_tags_en_json,
+                    record.analysis_tags_zh_json,
+                    record.analysis_colors_json,
+                    record.analysis_status,
+                    record.analysis_error,
                     record.original_filename,
                     record.mime_type,
                     record.file_size_bytes,
@@ -238,35 +303,94 @@ async def create_inspiration(
                 pass
         raise _error(500, "SAVE_FAILED", f"Failed to write metadata: {exc}") from exc
 
-    return InspirationDetailEnvelope(data=InspirationDetail.model_validate(_detail_payload(record)))
+    return get_inspiration_by_id(record.id)
 
 
-def list_inspirations(limit: int, offset: int, status: str) -> InspirationListEnvelope:
+def list_inspirations(limit: int, offset: int, status: str, q: str | None = None, board_id: str | None = None) -> InspirationListEnvelope:
     safe_limit = max(1, min(limit, 100))
     safe_offset = max(offset, 0)
     if status not in {"active", "archived"}:
         raise _error(422, "INVALID_STATUS", "Status must be active or archived")
 
+    search = _normalize_optional_text(q)
+    board_filter = _normalize_optional_text(board_id)
+    filters = ["inspirations.status = ?"]
+    values: list[object] = [status]
+
+    if board_filter:
+        filters.append("inspirations.board_id = ?")
+        values.append(board_filter)
+
+    if search:
+        like_search = f"%{search.lower()}%"
+        filters.append(
+            """
+            (
+                lower(coalesce(inspirations.title, '')) LIKE ?
+                OR lower(inspirations.original_filename) LIKE ?
+                OR lower(coalesce(inspirations.notes, '')) LIKE ?
+                OR lower(coalesce(inspirations.source_url, '')) LIKE ?
+                OR lower(coalesce(inspirations.analysis_prompt_en, '')) LIKE ?
+                OR lower(coalesce(inspirations.analysis_prompt_zh, '')) LIKE ?
+                OR lower(coalesce(inspirations.analysis_tags_en_json, '')) LIKE ?
+                OR lower(coalesce(inspirations.analysis_tags_zh_json, '')) LIKE ?
+            )
+            """
+        )
+        values.extend([like_search] * 8)
+
+    where_clause = " AND ".join(filters)
+
     with get_connection() as connection:
         rows = connection.execute(
-            """
-            SELECT id, title, status, original_filename, mime_type, file_size_bytes, created_at, updated_at
+            f"""
+            SELECT
+                inspirations.id,
+                inspirations.board_id,
+                boards.name AS board_name,
+                inspirations.title,
+                inspirations.status,
+                inspirations.original_filename,
+                inspirations.mime_type,
+                inspirations.file_size_bytes,
+                inspirations.created_at,
+                inspirations.updated_at,
+                inspirations.analysis_status,
+                inspirations.analysis_error,
+                inspirations.analysis_tags_en_json,
+                inspirations.analysis_tags_zh_json
             FROM inspirations
-            WHERE status = ?
-            ORDER BY datetime(created_at) DESC, id DESC
+            LEFT JOIN boards ON boards.id = inspirations.board_id
+            WHERE {where_clause}
+            ORDER BY datetime(inspirations.created_at) DESC, inspirations.id DESC
             LIMIT ? OFFSET ?
             """,
-            (status, safe_limit, safe_offset),
+            (*values, safe_limit, safe_offset),
         ).fetchall()
-        total = connection.execute("SELECT COUNT(*) FROM inspirations WHERE status = ?", (status,)).fetchone()[0]
+        total = connection.execute(
+            f"""
+            SELECT COUNT(*)
+            FROM inspirations
+            LEFT JOIN boards ON boards.id = inspirations.board_id
+            WHERE {where_clause}
+            """,
+            values,
+        ).fetchone()[0]
 
-    data = [InspirationListItem.model_validate(dict(row)) for row in rows]
+    data: list[InspirationListItem] = []
+    for row in rows:
+        payload = dict(row)
+        payload["file_url"] = f'/api/v1/inspirations/{payload["id"]}/file'
+        payload["analysis_tags_en"] = _parse_json_list(payload.pop("analysis_tags_en_json"))
+        payload["analysis_tags_zh"] = _parse_json_list(payload.pop("analysis_tags_zh_json"))
+        data.append(InspirationListItem.model_validate(payload))
+
     return InspirationListEnvelope(data=data, meta=PaginationMeta(limit=safe_limit, offset=safe_offset, total=total))
 
 
 def _fetch_record(inspiration_id: str) -> InspirationRecord:
     with get_connection() as connection:
-        row = connection.execute("SELECT * FROM inspirations WHERE id = ?", (inspiration_id,)).fetchone()
+        row = connection.execute(f"{_fetch_record_query()} WHERE inspirations.id = ?", (inspiration_id,)).fetchone()
 
     if row is None:
         raise _error(404, "INSPIRATION_NOT_FOUND", "Inspiration item not found")
@@ -287,6 +411,8 @@ def update_inspiration_metadata(inspiration_id: str, patch: InspirationMetadataP
     for field_name in patch.model_fields_set:
         if field_name == "source_url":
             updates[field_name] = _normalize_source_url(getattr(patch, field_name))
+        elif field_name == "board_id":
+            updates[field_name] = _validate_board_id(getattr(patch, field_name))
         else:
             updates[field_name] = _normalize_optional_text(getattr(patch, field_name))
 
@@ -333,25 +459,96 @@ def analyze_inspiration(inspiration_id: str) -> InspirationDetailEnvelope:
     record = _fetch_record(inspiration_id)
     stored_path = STORE_DIR / Path(record.storage_key).relative_to("store")
 
+    processing_at = _utc_now()
+    with get_connection() as connection:
+        connection.execute(
+            """
+            UPDATE inspirations
+            SET analysis_status = 'processing', analysis_error = NULL, updated_at = ?
+            WHERE id = ?
+            """,
+            (processing_at, inspiration_id),
+        )
+        connection.commit()
+
     if not stored_path.exists():
-        raise _error(500, "SAVE_FAILED", "Stored file is missing from local storage")
+        message = "Stored file is missing from local storage"
+        with get_connection() as connection:
+            connection.execute(
+                """
+                UPDATE inspirations
+                SET analysis_status = 'failed', analysis_error = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (message, _utc_now(), inspiration_id),
+            )
+            connection.commit()
+        raise _error(500, "SAVE_FAILED", message)
 
     try:
         payload = stored_path.read_bytes()
     except OSError as exc:
-        raise _error(500, "SAVE_FAILED", f"Failed to read stored file locally: {exc}") from exc
+        message = f"Failed to read stored file locally: {exc}"
+        with get_connection() as connection:
+            connection.execute(
+                """
+                UPDATE inspirations
+                SET analysis_status = 'failed', analysis_error = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (message, _utc_now(), inspiration_id),
+                )
+            connection.commit()
+        raise _error(500, "SAVE_FAILED", message) from exc
 
-    summary, tags = analyze_image(payload=payload, mime_type=record.mime_type)
+    try:
+        analysis = analyze_image(payload=payload, mime_type=record.mime_type)
+    except AppError as exc:
+        failed_at = _utc_now()
+        with get_connection() as connection:
+            connection.execute(
+                """
+                UPDATE inspirations
+                SET analysis_status = 'failed', analysis_error = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (exc.message, failed_at, inspiration_id),
+            )
+            connection.commit()
+        raise
+
     analyzed_at = _utc_now()
 
     with get_connection() as connection:
         connection.execute(
             """
             UPDATE inspirations
-            SET analysis_summary = ?, analysis_tags_json = ?, analyzed_at = ?, updated_at = ?
+            SET
+                analysis_summary = ?,
+                analysis_tags_json = ?,
+                analysis_prompt_en = ?,
+                analysis_prompt_zh = ?,
+                analysis_tags_en_json = ?,
+                analysis_tags_zh_json = ?,
+                analysis_colors_json = ?,
+                analysis_status = 'completed',
+                analysis_error = NULL,
+                analyzed_at = ?,
+                updated_at = ?
             WHERE id = ?
             """,
-            (summary, json.dumps(tags), analyzed_at, analyzed_at, inspiration_id),
+            (
+                str(analysis["summary"]),
+                json.dumps(list(analysis["tags_en"])),
+                str(analysis["prompt_en"]),
+                str(analysis["prompt_zh"]),
+                json.dumps(list(analysis["tags_en"])),
+                json.dumps(list(analysis["tags_zh"])),
+                json.dumps(list(analysis["colors"])),
+                analyzed_at,
+                analyzed_at,
+                inspiration_id,
+            ),
         )
         connection.commit()
 

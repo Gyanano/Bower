@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from app.db import sqlite
 from app.main import app
+from app.services import image_analysis
 
 
 def _build_client(monkeypatch):
@@ -253,5 +254,45 @@ def test_get_ai_settings_does_not_fallback_to_legacy_env_after_key_is_cleared(mo
         assert fetched.json()["data"]["has_api_key"] is False
         assert fetched.json()["data"]["api_key_mask"] is None
         assert fetched.json()["data"]["api_key_source"] is None
+    finally:
+        tmp.cleanup()
+
+
+def test_app_preferences_round_trip(monkeypatch):
+    tmp, client = _build_client(monkeypatch)
+    try:
+        with client:
+            initial = client.get("/api/v1/settings/preferences")
+            updated = client.put("/api/v1/settings/preferences", json={"ui_language": "en"})
+
+        assert initial.status_code == 200
+        assert initial.json()["data"]["ui_language"] == "zh-CN"
+        assert updated.status_code == 200
+        assert updated.json()["data"]["ui_language"] == "en"
+    finally:
+        tmp.cleanup()
+
+
+def test_ai_settings_test_endpoint(monkeypatch):
+    tmp, client = _build_client(monkeypatch)
+    monkeypatch.setattr(image_analysis, "test_provider_connection", lambda **kwargs: "OpenAI connection successful")
+    try:
+        with client:
+            response = client.post(
+                "/api/v1/settings/ai/test",
+                json={
+                    "provider": "openai",
+                    "model_id": "gpt-4.1-mini",
+                    "api_key": "sk-test-1234",
+                },
+            )
+
+        assert response.status_code == 200
+        assert response.json()["data"] == {
+            "success": True,
+            "provider": "openai",
+            "model_id": "gpt-4.1-mini",
+            "message": "OpenAI connection successful",
+        }
     finally:
         tmp.cleanup()

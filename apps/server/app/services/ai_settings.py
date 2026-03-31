@@ -3,7 +3,16 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from app.db.sqlite import get_connection
-from app.schemas.ai_settings import AIProvider, AISettings, AISettingsEnvelope, AISettingsUpdate
+from app.errors import AppError
+from app.schemas.ai_settings import (
+    AIProvider,
+    AISettings,
+    AISettingsEnvelope,
+    AISettingsTestEnvelope,
+    AISettingsTestRequest,
+    AISettingsTestResult,
+    AISettingsUpdate,
+)
 
 SOURCE_STORED = "stored"
 SOURCE_LEGACY_ENV = "legacy_env"
@@ -192,3 +201,35 @@ def update_ai_settings(payload: AISettingsUpdate) -> AISettingsEnvelope:
         connection.commit()
 
     return get_ai_settings()
+
+
+def test_ai_settings(payload: AISettingsTestRequest) -> AISettingsTestEnvelope:
+    if payload.api_key is not None and payload.api_key.strip():
+        api_key = payload.api_key.strip()
+    else:
+        resolved = resolve_ai_provider_settings()
+        if resolved is None or resolved.provider != payload.provider or not resolved.api_key:
+            raise AppError(
+                status_code=422,
+                code="AI_PROVIDER_NOT_CONFIGURED",
+                message="Provide an API key or save settings for this provider before testing the connection",
+            )
+        api_key = resolved.api_key
+
+    model_id = _normalize_optional_text(payload.model_id) or PROVIDER_DEFAULT_MODEL_IDS[payload.provider]
+    from app.services.image_analysis import test_provider_connection
+
+    message = test_provider_connection(
+        provider=payload.provider,
+        model_id=model_id,
+        api_key=api_key,
+        legacy_openai_base_url=_normalize_optional_text(os.getenv("BOWER_OPENAI_BASE_URL")) if payload.provider == "openai" else None,
+    )
+    return AISettingsTestEnvelope(
+        data=AISettingsTestResult(
+            success=True,
+            provider=payload.provider,
+            model_id=model_id,
+            message=message,
+        )
+    )

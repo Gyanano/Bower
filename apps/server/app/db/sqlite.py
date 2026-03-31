@@ -5,6 +5,12 @@ BASE_DIR = Path(__file__).resolve().parents[4]
 DATA_DIR = BASE_DIR / "data"
 DATABASE_PATH = DATA_DIR / "meta.db"
 
+DEFAULT_BOARDS = (
+    ("board_app_ui", "App UI 参考", "app-ui-reference"),
+    ("board_landing", "落地页排版", "landing-page-layout"),
+)
+DEFAULT_UI_LANGUAGE = "zh-CN"
+
 
 def get_connection() -> sqlite3.Connection:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -15,15 +21,43 @@ def get_connection() -> sqlite3.Connection:
 
 def initialize_database() -> None:
     with get_connection() as connection:
+        connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS boards (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                slug TEXT NOT NULL UNIQUE,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS app_preferences (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                ui_language TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
         connection.execute(
             """
             CREATE TABLE IF NOT EXISTS inspirations (
                 id TEXT PRIMARY KEY,
+                board_id TEXT NULL,
                 title TEXT NULL,
                 notes TEXT NULL,
                 source_url TEXT NULL,
                 analysis_summary TEXT NULL,
                 analysis_tags_json TEXT NULL,
+                analysis_prompt_en TEXT NULL,
+                analysis_prompt_zh TEXT NULL,
+                analysis_tags_en_json TEXT NULL,
+                analysis_tags_zh_json TEXT NULL,
+                analysis_colors_json TEXT NULL,
+                analysis_status TEXT NOT NULL DEFAULT 'idle',
+                analysis_error TEXT NULL,
                 status TEXT NOT NULL DEFAULT 'active',
                 original_filename TEXT NOT NULL,
                 mime_type TEXT NOT NULL,
@@ -32,7 +66,8 @@ def initialize_database() -> None:
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL DEFAULT '',
                 analyzed_at TEXT NULL,
-                archived_at TEXT NULL
+                archived_at TEXT NULL,
+                FOREIGN KEY (board_id) REFERENCES boards(id)
             )
             """
         )
@@ -48,9 +83,9 @@ def initialize_database() -> None:
             """
         )
 
-        columns = {
-            row["name"] for row in connection.execute("PRAGMA table_info(inspirations)").fetchall()
-        }
+        columns = {row["name"] for row in connection.execute("PRAGMA table_info(inspirations)").fetchall()}
+        if "board_id" not in columns:
+            connection.execute("ALTER TABLE inspirations ADD COLUMN board_id TEXT NULL")
         if "status" not in columns:
             connection.execute("ALTER TABLE inspirations ADD COLUMN status TEXT NOT NULL DEFAULT 'active'")
         if "updated_at" not in columns:
@@ -60,11 +95,52 @@ def initialize_database() -> None:
             connection.execute("ALTER TABLE inspirations ADD COLUMN analysis_summary TEXT NULL")
         if "analysis_tags_json" not in columns:
             connection.execute("ALTER TABLE inspirations ADD COLUMN analysis_tags_json TEXT NULL")
+        if "analysis_prompt_en" not in columns:
+            connection.execute("ALTER TABLE inspirations ADD COLUMN analysis_prompt_en TEXT NULL")
+        if "analysis_prompt_zh" not in columns:
+            connection.execute("ALTER TABLE inspirations ADD COLUMN analysis_prompt_zh TEXT NULL")
+        if "analysis_tags_en_json" not in columns:
+            connection.execute("ALTER TABLE inspirations ADD COLUMN analysis_tags_en_json TEXT NULL")
+        if "analysis_tags_zh_json" not in columns:
+            connection.execute("ALTER TABLE inspirations ADD COLUMN analysis_tags_zh_json TEXT NULL")
+        if "analysis_colors_json" not in columns:
+            connection.execute("ALTER TABLE inspirations ADD COLUMN analysis_colors_json TEXT NULL")
+        if "analysis_status" not in columns:
+            connection.execute("ALTER TABLE inspirations ADD COLUMN analysis_status TEXT NOT NULL DEFAULT 'idle'")
+        if "analysis_error" not in columns:
+            connection.execute("ALTER TABLE inspirations ADD COLUMN analysis_error TEXT NULL")
         if "analyzed_at" not in columns:
             connection.execute("ALTER TABLE inspirations ADD COLUMN analyzed_at TEXT NULL")
         if "archived_at" not in columns:
             connection.execute("ALTER TABLE inspirations ADD COLUMN archived_at TEXT NULL")
 
+        for board_id, board_name, board_slug in DEFAULT_BOARDS:
+            connection.execute(
+                """
+                INSERT INTO boards (id, name, slug, created_at)
+                VALUES (?, ?, ?, datetime('now'))
+                ON CONFLICT(id) DO UPDATE SET
+                    name = excluded.name,
+                    slug = excluded.slug
+                """,
+                (board_id, board_name, board_slug),
+            )
+
+        connection.execute(
+            """
+            INSERT INTO app_preferences (id, ui_language, updated_at)
+            VALUES (1, ?, datetime('now'))
+            ON CONFLICT(id) DO NOTHING
+            """,
+            (DEFAULT_UI_LANGUAGE,),
+        )
+
+        default_board_id = DEFAULT_BOARDS[0][0]
+        connection.execute(
+            "UPDATE inspirations SET board_id = ? WHERE board_id IS NULL OR board_id = ''",
+            (default_board_id,),
+        )
         connection.execute("UPDATE inspirations SET status = 'active' WHERE status IS NULL OR status = ''")
         connection.execute("UPDATE inspirations SET updated_at = created_at WHERE updated_at = ''")
+        connection.execute("UPDATE inspirations SET analysis_status = 'idle' WHERE analysis_status IS NULL OR analysis_status = ''")
         connection.commit()

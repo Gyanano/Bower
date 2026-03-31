@@ -4,6 +4,7 @@ import socket
 from urllib import error, request
 
 from app.errors import AppError
+from app.schemas.ai_settings import AIProvider
 from app.services.ai_settings import resolve_ai_provider_settings
 
 OPENAI_BASE_URL = "https://api.openai.com"
@@ -12,9 +13,12 @@ GOOGLE_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 VOLCENGINE_CHAT_COMPLETIONS_URL = "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
 ANALYSIS_PROMPT = (
     "Analyze this inspiration image for a design library. "
-    "Return JSON with keys summary and tags. "
+    "Return JSON with keys summary, prompt_en, prompt_zh, tags_en, tags_zh, and colors. "
     "summary must be one concise sentence. "
-    "tags must be an array of 3 to 8 short style or subject labels."
+    "prompt_en must be one complete English reverse prompt. "
+    "prompt_zh must be one complete Simplified Chinese reverse prompt. "
+    "tags_en and tags_zh must be arrays of 3 to 8 short style labels. "
+    "colors must be 3 to 6 dominant hex colors."
 )
 CHAT_COMPLETION_PROMPT = f"{ANALYSIS_PROMPT} Reply with JSON only and no extra text."
 ANALYSIS_SCHEMA = {
@@ -22,9 +26,13 @@ ANALYSIS_SCHEMA = {
     "additionalProperties": False,
     "properties": {
         "summary": {"type": "string"},
-        "tags": {"type": "array", "items": {"type": "string"}},
+        "prompt_en": {"type": "string"},
+        "prompt_zh": {"type": "string"},
+        "tags_en": {"type": "array", "items": {"type": "string"}},
+        "tags_zh": {"type": "array", "items": {"type": "string"}},
+        "colors": {"type": "array", "items": {"type": "string"}},
     },
-    "required": ["summary", "tags"],
+    "required": ["summary", "prompt_en", "prompt_zh", "tags_en", "tags_zh", "colors"],
 }
 
 
@@ -32,26 +40,54 @@ def _error(status_code: int, code: str, message: str) -> AppError:
     return AppError(status_code=status_code, code=code, message=message)
 
 
-def _normalize_result(payload: object) -> tuple[str, list[str]]:
+def _normalize_string_list(payload: object) -> list[str]:
+    if not isinstance(payload, list):
+        return []
+
+    normalized_items: list[str] = []
+    for item in payload:
+        normalized = str(item).strip()
+        if normalized and normalized not in normalized_items:
+            normalized_items.append(normalized)
+
+    return normalized_items
+
+
+def _normalize_hex_colors(payload: object) -> list[str]:
+    colors: list[str] = []
+    for item in _normalize_string_list(payload):
+        candidate = item.upper()
+        if not candidate.startswith("#"):
+            candidate = f"#{candidate}"
+        if len(candidate) == 7 and all(character in "#0123456789ABCDEF" for character in candidate):
+            colors.append(candidate)
+    return colors[:6]
+
+
+def _normalize_result(payload: object) -> dict[str, object]:
     if not isinstance(payload, dict):
         raise _error(502, "AI_ANALYSIS_FAILED", "AI provider returned an invalid analysis payload")
 
     summary = str(payload.get("summary", "")).strip()
-    raw_tags = payload.get("tags", [])
+    prompt_en = str(payload.get("prompt_en", "")).strip()
+    prompt_zh = str(payload.get("prompt_zh", "")).strip()
+    tags_en = _normalize_string_list(payload.get("tags_en", []))
+    tags_zh = _normalize_string_list(payload.get("tags_zh", []))
+    colors = _normalize_hex_colors(payload.get("colors", []))
 
-    if not summary or not isinstance(raw_tags, list):
+    if not summary or not prompt_en or not prompt_zh:
+        raise _error(502, "AI_ANALYSIS_FAILED", "AI provider returned an incomplete analysis payload")
+    if not tags_en or not tags_zh or not colors:
         raise _error(502, "AI_ANALYSIS_FAILED", "AI provider returned an incomplete analysis payload")
 
-    tags: list[str] = []
-    for tag in raw_tags:
-        normalized = str(tag).strip()
-        if normalized and normalized not in tags:
-            tags.append(normalized)
-
-    if not tags:
-        raise _error(502, "AI_ANALYSIS_FAILED", "AI provider returned an incomplete analysis payload")
-
-    return summary, tags[:12]
+    return {
+        "summary": summary,
+        "prompt_en": prompt_en,
+        "prompt_zh": prompt_zh,
+        "tags_en": tags_en[:12],
+        "tags_zh": tags_zh[:12],
+        "colors": colors,
+    }
 
 
 def _provider_transport_message(exc: BaseException) -> str:
@@ -260,7 +296,7 @@ def _extract_error_message(payload: object) -> str | None:
     return None
 
 
-def _post_json(*, url: str, request_body: dict, headers: dict[str, str]) -> object:
+def _post_json(*, url: str, request_body: dict[str, object], headers: dict[str, str]) -> object:
     http_request = request.Request(
         url=url,
         data=json.dumps(request_body).encode("utf-8"),
@@ -282,7 +318,7 @@ def _post_json(*, url: str, request_body: dict, headers: dict[str, str]) -> obje
         raise _error(502, "AI_ANALYSIS_FAILED", _provider_transport_message(exc)) from exc
 
 
-def _analyze_with_openai(*, payload: bytes, mime_type: str, api_key: str, model_id: str, base_url: str) -> tuple[str, list[str]]:
+def _analyze_with_openai(*, payload: bytes, mime_type: str, api_key: str, model_id: str, base_url: str) -> dict[str, object]:
     encoded = base64.b64encode(payload).decode("utf-8")
     response_payload = _post_json(
         url=_responses_url(base_url),
@@ -321,13 +357,13 @@ def _analyze_with_openai(*, payload: bytes, mime_type: str, api_key: str, model_
     raise _error(502, "AI_ANALYSIS_FAILED", "AI provider returned no analysis output")
 
 
-def _analyze_with_anthropic(*, payload: bytes, mime_type: str, api_key: str, model_id: str) -> tuple[str, list[str]]:
+def _analyze_with_anthropic(*, payload: bytes, mime_type: str, api_key: str, model_id: str) -> dict[str, object]:
     encoded = base64.b64encode(payload).decode("utf-8")
     response_payload = _post_json(
         url=ANTHROPIC_MESSAGES_URL,
         request_body={
             "model": model_id,
-            "max_tokens": 256,
+            "max_tokens": 512,
             "messages": [
                 {
                     "role": "user",
@@ -367,7 +403,7 @@ def _analyze_with_anthropic(*, payload: bytes, mime_type: str, api_key: str, mod
     raise _error(502, "AI_ANALYSIS_FAILED", "AI provider returned no analysis output")
 
 
-def _analyze_with_google(*, payload: bytes, mime_type: str, api_key: str, model_id: str) -> tuple[str, list[str]]:
+def _analyze_with_google(*, payload: bytes, mime_type: str, api_key: str, model_id: str) -> dict[str, object]:
     encoded = base64.b64encode(payload).decode("utf-8")
     response_payload = _post_json(
         url=_google_generate_content_url(model_id),
@@ -402,7 +438,7 @@ def _analyze_with_google(*, payload: bytes, mime_type: str, api_key: str, model_
     raise _error(502, "AI_ANALYSIS_FAILED", "AI provider returned no analysis output")
 
 
-def _analyze_with_volcengine(*, payload: bytes, mime_type: str, api_key: str, model_id: str) -> tuple[str, list[str]]:
+def _analyze_with_volcengine(*, payload: bytes, mime_type: str, api_key: str, model_id: str) -> dict[str, object]:
     encoded = base64.b64encode(payload).decode("utf-8")
     response_payload = _post_json(
         url=VOLCENGINE_CHAT_COMPLETIONS_URL,
@@ -420,6 +456,7 @@ def _analyze_with_volcengine(*, payload: bytes, mime_type: str, api_key: str, mo
                     ],
                 }
             ],
+            "response_format": {"type": "json_object"},
         },
         headers={
             "authorization": f"Bearer {api_key}",
@@ -437,42 +474,94 @@ def _analyze_with_volcengine(*, payload: bytes, mime_type: str, api_key: str, mo
     raise _error(502, "AI_ANALYSIS_FAILED", "AI provider returned no analysis output")
 
 
-def analyze_image(*, payload: bytes, mime_type: str) -> tuple[str, list[str]]:
-    provider_settings = resolve_ai_provider_settings()
-    if provider_settings is None or provider_settings.api_key is None or provider_settings.model_id is None:
+def analyze_image(*, payload: bytes, mime_type: str) -> dict[str, object]:
+    resolved = resolve_ai_provider_settings()
+    if resolved is None or not resolved.api_key or not resolved.model_id:
         raise _error(503, "AI_PROVIDER_NOT_CONFIGURED", "AI analysis provider is not configured")
 
-    if provider_settings.provider == "openai":
+    if resolved.provider == "openai":
         return _analyze_with_openai(
             payload=payload,
             mime_type=mime_type,
-            api_key=provider_settings.api_key,
-            model_id=provider_settings.model_id,
-            base_url=provider_settings.legacy_openai_base_url or OPENAI_BASE_URL,
+            api_key=resolved.api_key,
+            model_id=resolved.model_id,
+            base_url=resolved.legacy_openai_base_url or OPENAI_BASE_URL,
         )
-
-    if provider_settings.provider == "anthropic":
+    if resolved.provider == "anthropic":
         return _analyze_with_anthropic(
             payload=payload,
             mime_type=mime_type,
-            api_key=provider_settings.api_key,
-            model_id=provider_settings.model_id,
+            api_key=resolved.api_key,
+            model_id=resolved.model_id,
         )
-
-    if provider_settings.provider == "google":
+    if resolved.provider == "google":
         return _analyze_with_google(
             payload=payload,
             mime_type=mime_type,
-            api_key=provider_settings.api_key,
-            model_id=provider_settings.model_id,
+            api_key=resolved.api_key,
+            model_id=resolved.model_id,
         )
-
-    if provider_settings.provider == "volcengine":
+    if resolved.provider == "volcengine":
         return _analyze_with_volcengine(
             payload=payload,
             mime_type=mime_type,
-            api_key=provider_settings.api_key,
-            model_id=provider_settings.model_id,
+            api_key=resolved.api_key,
+            model_id=resolved.model_id,
         )
+
+    raise _error(503, "AI_PROVIDER_NOT_CONFIGURED", "AI analysis provider is not configured")
+
+
+def test_provider_connection(
+    *,
+    provider: AIProvider,
+    model_id: str | None,
+    api_key: str,
+    legacy_openai_base_url: str | None = None,
+) -> str:
+    resolved_model_id = (model_id or "").strip()
+    if not resolved_model_id:
+        raise _error(422, "MODEL_ID_REQUIRED", "Model / endpoint ID is required")
+
+    if provider == "openai":
+        _post_json(
+            url=_responses_url(legacy_openai_base_url or OPENAI_BASE_URL),
+            request_body={"model": resolved_model_id, "input": "Reply with OK", "max_output_tokens": 4},
+            headers={"authorization": f"Bearer {api_key}", "content-type": "application/json"},
+        )
+        return "OpenAI connection successful"
+    if provider == "anthropic":
+        _post_json(
+            url=ANTHROPIC_MESSAGES_URL,
+            request_body={
+                "model": resolved_model_id,
+                "max_tokens": 8,
+                "messages": [{"role": "user", "content": [{"type": "text", "text": "Reply with OK"}]}],
+            },
+            headers={
+                "content-type": "application/json",
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+            },
+        )
+        return "Anthropic connection successful"
+    if provider == "google":
+        _post_json(
+            url=_google_generate_content_url(resolved_model_id),
+            request_body={"contents": [{"parts": [{"text": "Reply with OK"}]}]},
+            headers={"content-type": "application/json", "x-goog-api-key": api_key},
+        )
+        return "Google AI Studio connection successful"
+    if provider == "volcengine":
+        _post_json(
+            url=VOLCENGINE_CHAT_COMPLETIONS_URL,
+            request_body={
+                "model": resolved_model_id,
+                "messages": [{"role": "user", "content": [{"type": "text", "text": "Reply with OK"}]}],
+                "max_tokens": 8,
+            },
+            headers={"authorization": f"Bearer {api_key}", "content-type": "application/json"},
+        )
+        return "ByteDance Volcano / Ark connection successful"
 
     raise _error(503, "AI_PROVIDER_NOT_CONFIGURED", "AI analysis provider is not configured")

@@ -49,10 +49,13 @@ def test_upload_list_detail_and_inline_file_flow(client: TestClient):
     assert created["title"] == "Moodboard"
     assert created["notes"] == "Warm tones"
     assert created["source_url"] == "https://example.com/ref"
+    assert created["board_id"] == "board_app_ui"
+    assert created["board_name"] == "App UI 参考"
     assert created["status"] == "active"
     assert created["original_filename"] == "sample.png"
     assert created["mime_type"] == "image/png"
     assert created["file_url"] == f"/api/v1/inspirations/{inspiration_id}/file"
+    assert created["analysis_status"] == "idle"
     assert created["updated_at"] == created["created_at"]
     assert created["archived_at"] is None
 
@@ -61,6 +64,7 @@ def test_upload_list_detail_and_inline_file_flow(client: TestClient):
     assert listed.status_code == 200
     assert listed.json()["meta"]["total"] == 1
     assert listed.json()["data"][0]["id"] == inspiration_id
+    assert listed.json()["data"][0]["board_name"] == "App UI 参考"
     assert listed.json()["data"][0]["status"] == "active"
 
     detail = client.get(f"/api/v1/inspirations/{inspiration_id}")
@@ -254,7 +258,14 @@ def test_analyze_flow_persists_summary_tags_and_timestamp(client: TestClient, mo
     def fake_analyze_image(*, payload: bytes, mime_type: str):
         assert payload == PNG_BYTES
         assert mime_type == "image/png"
-        return ("Soft neutral interior with warm wood accents.", ["interior", "warm tones", "wood", "minimal"])
+        return {
+            "summary": "Soft neutral interior with warm wood accents.",
+            "prompt_en": "A soft neutral interior with warm wood accents, minimal editorial styling.",
+            "prompt_zh": "一个柔和中性色调、带温暖木质点缀的极简室内编辑风格画面。",
+            "tags_en": ["interior", "warm tones", "wood", "minimal"],
+            "tags_zh": ["室内", "暖色调", "木质", "极简"],
+            "colors": ["#E8E8ED", "#8E8E93", "#1C1C1E"],
+        }
 
     monkeypatch.setattr(image_analysis, "analyze_image", fake_analyze_image)
     monkeypatch.setattr(inspiration_service, "analyze_image", fake_analyze_image)
@@ -265,6 +276,11 @@ def test_analyze_flow_persists_summary_tags_and_timestamp(client: TestClient, mo
     analyzed = response.json()["data"]
     assert analyzed["analysis_summary"] == "Soft neutral interior with warm wood accents."
     assert analyzed["analysis_tags"] == ["interior", "warm tones", "wood", "minimal"]
+    assert analyzed["analysis_prompt_en"] == "A soft neutral interior with warm wood accents, minimal editorial styling."
+    assert analyzed["analysis_prompt_zh"] == "一个柔和中性色调、带温暖木质点缀的极简室内编辑风格画面。"
+    assert analyzed["analysis_tags_zh"] == ["室内", "暖色调", "木质", "极简"]
+    assert analyzed["analysis_colors"] == ["#E8E8ED", "#8E8E93", "#1C1C1E"]
+    assert analyzed["analysis_status"] == "completed"
     assert analyzed["analyzed_at"] is not None
     assert analyzed["updated_at"] == analyzed["analyzed_at"]
 
@@ -274,6 +290,46 @@ def test_analyze_flow_persists_summary_tags_and_timestamp(client: TestClient, mo
     assert detail.json()["data"]["analysis_summary"] == analyzed["analysis_summary"]
     assert detail.json()["data"]["analysis_tags"] == analyzed["analysis_tags"]
     assert detail.json()["data"]["analyzed_at"] == analyzed["analyzed_at"]
+
+
+def test_boards_search_and_board_filtering(client: TestClient, monkeypatch):
+    first = client.post(
+        "/api/v1/inspirations",
+        data={"title": "Concrete UI"},
+        files={"file": ("first.png", PNG_BYTES, "image/png")},
+    ).json()["data"]
+    second = client.post(
+        "/api/v1/inspirations",
+        data={"title": "Landing Hero"},
+        files={"file": ("second.png", PNG_BYTES, "image/png")},
+    ).json()["data"]
+
+    client.patch(f'/api/v1/inspirations/{second["id"]}', json={"board_id": "board_landing"})
+
+    def fake_analyze_image(*, payload: bytes, mime_type: str):
+        return {
+            "summary": "Landing page hero scene.",
+            "prompt_en": "A landing page hero with crisp typography and blue accents.",
+            "prompt_zh": "一个具有清晰排版和蓝色点缀的落地页头图区块。",
+            "tags_en": ["landing", "hero", "typography"],
+            "tags_zh": ["落地页", "头图", "排版"],
+            "colors": ["#E8E8ED", "#8E8E93", "#1C1C1E"],
+        }
+
+    monkeypatch.setattr(image_analysis, "analyze_image", fake_analyze_image)
+    monkeypatch.setattr(inspiration_service, "analyze_image", fake_analyze_image)
+    client.post(f'/api/v1/inspirations/{second["id"]}/analyze')
+
+    boards = client.get("/api/v1/boards")
+    search = client.get("/api/v1/inspirations?q=landing")
+    filtered = client.get("/api/v1/inspirations?board_id=board_landing")
+
+    assert boards.status_code == 200
+    assert [board["id"] for board in boards.json()["data"]] == ["board_app_ui", "board_landing"]
+    assert search.status_code == 200
+    assert [item["id"] for item in search.json()["data"]] == [second["id"]]
+    assert filtered.status_code == 200
+    assert [item["id"] for item in filtered.json()["data"]] == [second["id"]]
 
 
 def test_analyze_requires_configured_provider(client: TestClient, monkeypatch):

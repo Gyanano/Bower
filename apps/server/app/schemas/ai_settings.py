@@ -31,3 +31,20 @@ class AISettingsUpdate(BaseModel):
 
 class AISettingsEnvelope(BaseModel):
     data: AISettings
+
+
+class AISettingsTestRequest(BaseModel):
+    provider: AIProvider
+    model_id: str | None = None
+    api_key: str | None = None
+
+
+class AISettingsTestResult(BaseModel):
+    success: bool
+    provider: AIProvider
+    model_id: str | None = None
+    message: str
+
+
+class AISettingsTestEnvelope(BaseModel):
+    data: AISettingsTestResult
