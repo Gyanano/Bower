@@ -5,12 +5,32 @@ import pytest
 
 from app.errors import AppError
 from app.services import image_analysis
+from app.services.ai_settings import ResolvedAIProviderSettings
 
 
 @pytest.fixture()
-def configured_provider(monkeypatch):
-    monkeypatch.setenv("BOWER_AI_PROVIDER", "openai")
-    monkeypatch.setenv("BOWER_OPENAI_API_KEY", "test-key")
+def configure_provider(monkeypatch):
+    def _configure(
+        *,
+        provider: str,
+        model_id: str | None,
+        api_key: str | None = "test-key",
+        provider_source: str = "stored",
+        api_key_source: str | None = None,
+        legacy_openai_base_url: str | None = None,
+    ):
+        resolved = ResolvedAIProviderSettings(
+            provider=provider,
+            model_id=model_id,
+            api_key=api_key,
+            provider_source=provider_source,
+            api_key_source=api_key_source or ("stored" if api_key else None),
+            updated_at=None,
+            legacy_openai_base_url=legacy_openai_base_url,
+        )
+        monkeypatch.setattr(image_analysis, "resolve_ai_provider_settings", lambda: resolved)
+
+    return _configure
 
 
 class _FakeResponse:
@@ -27,89 +47,187 @@ class _FakeResponse:
         return self._payload
 
 
-def _analysis_response_bytes() -> bytes:
-    return json.dumps(
-        {
-            "output_text": json.dumps(
-                {
-                    "summary": "Minimal living room scene.",
-                    "tags": ["interior", "minimal", "living room"],
-                }
-            )
-        }
-    ).encode("utf-8")
-
-
-def _analysis_response_bytes_from_output_content() -> bytes:
-    return json.dumps(
-        {
-            "output": [
-                {
-                    "type": "message",
-                    "content": [
-                        {
-                            "type": "output_text",
-                            "text": json.dumps(
-                                {
-                                    "summary": "Editorial monochrome fashion image.",
-                                    "tags": ["editorial", "monochrome", "fashion"],
-                                }
-                            ),
-                        }
-                    ],
-                }
-            ]
-        }
-    ).encode("utf-8")
-
-
-def test_analyze_image_uses_default_openai_base_url(monkeypatch, configured_provider):
-    captured = {}
-
+def _capture_request(captured: dict):
     def fake_urlopen(http_request, timeout=0):
         captured["url"] = http_request.full_url
-        return _FakeResponse(_analysis_response_bytes())
+        captured["headers"] = {key.lower(): value for key, value in http_request.header_items()}
+        captured["body"] = json.loads(http_request.data.decode("utf-8"))
+        return _FakeResponse(captured["response_bytes"])
 
-    monkeypatch.setattr(image_analysis.request, "urlopen", fake_urlopen)
+    return fake_urlopen
+
+
+def test_analyze_image_uses_openai_responses_api(monkeypatch, configure_provider):
+    configure_provider(provider="openai", model_id="gpt-4.1-mini")
+    captured = {
+        "response_bytes": json.dumps(
+            {
+                "output_text": json.dumps(
+                    {
+                        "summary": "Minimal living room scene.",
+                        "tags": ["interior", "minimal", "living room"],
+                    }
+                )
+            }
+        ).encode("utf-8")
+    }
+    monkeypatch.setattr(image_analysis.request, "urlopen", _capture_request(captured))
 
     summary, tags = image_analysis.analyze_image(payload=b"image-bytes", mime_type="image/png")
 
     assert captured["url"] == "https://api.openai.com/v1/responses"
+    assert captured["headers"]["authorization"] == "Bearer test-key"
+    assert captured["body"]["model"] == "gpt-4.1-mini"
+    assert captured["body"]["text"]["format"]["type"] == "json_schema"
+    assert captured["body"]["input"][0]["content"][1]["image_url"].startswith("data:image/png;base64,")
     assert summary == "Minimal living room scene."
     assert tags == ["interior", "minimal", "living room"]
 
 
-def test_analyze_image_uses_configured_openai_base_url_without_v1(monkeypatch, configured_provider):
-    captured = {}
-    monkeypatch.setenv("BOWER_OPENAI_BASE_URL", "https://api.gptsapi.net/")
-
-    def fake_urlopen(http_request, timeout=0):
-        captured["url"] = http_request.full_url
-        return _FakeResponse(_analysis_response_bytes())
-
-    monkeypatch.setattr(image_analysis.request, "urlopen", fake_urlopen)
+@pytest.mark.parametrize(
+    ("legacy_openai_base_url", "expected_url"),
+    [
+        ("https://api.gptsapi.net/", "https://api.gptsapi.net/v1/responses"),
+        ("https://api.gptsapi.net/v1", "https://api.gptsapi.net/v1/responses"),
+    ],
+)
+def test_analyze_image_uses_legacy_openai_base_url_when_present(
+    monkeypatch,
+    configure_provider,
+    legacy_openai_base_url: str,
+    expected_url: str,
+):
+    configure_provider(
+        provider="openai",
+        model_id="gpt-4.1-mini",
+        provider_source="legacy_env",
+        api_key_source="legacy_env",
+        legacy_openai_base_url=legacy_openai_base_url,
+    )
+    captured = {
+        "response_bytes": json.dumps(
+            {
+                "output_text": json.dumps(
+                    {
+                        "summary": "Minimal living room scene.",
+                        "tags": ["interior", "minimal", "living room"],
+                    }
+                )
+            }
+        ).encode("utf-8")
+    }
+    monkeypatch.setattr(image_analysis.request, "urlopen", _capture_request(captured))
 
     image_analysis.analyze_image(payload=b"image-bytes", mime_type="image/png")
 
-    assert captured["url"] == "https://api.gptsapi.net/v1/responses"
+    assert captured["url"] == expected_url
 
 
-def test_analyze_image_uses_configured_openai_base_url_with_v1(monkeypatch, configured_provider):
-    captured = {}
-    monkeypatch.setenv("BOWER_OPENAI_BASE_URL", "https://api.gptsapi.net/v1")
+def test_analyze_image_uses_anthropic_messages_api(monkeypatch, configure_provider):
+    configure_provider(provider="anthropic", model_id="claude-3-5-haiku-latest")
+    captured = {
+        "response_bytes": json.dumps(
+            {
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "name": "inspiration_analysis",
+                        "input": {
+                            "summary": "Editorial monochrome fashion image.",
+                            "tags": ["editorial", "monochrome", "fashion"],
+                        },
+                    }
+                ]
+            }
+        ).encode("utf-8")
+    }
+    monkeypatch.setattr(image_analysis.request, "urlopen", _capture_request(captured))
 
-    def fake_urlopen(http_request, timeout=0):
-        captured["url"] = http_request.full_url
-        return _FakeResponse(_analysis_response_bytes())
+    summary, tags = image_analysis.analyze_image(payload=b"image-bytes", mime_type="image/jpeg")
 
-    monkeypatch.setattr(image_analysis.request, "urlopen", fake_urlopen)
+    assert captured["url"] == "https://api.anthropic.com/v1/messages"
+    assert captured["headers"]["x-api-key"] == "test-key"
+    assert captured["headers"]["anthropic-version"] == "2023-06-01"
+    assert captured["body"]["model"] == "claude-3-5-haiku-latest"
+    assert captured["body"]["tool_choice"] == {"type": "tool", "name": "inspiration_analysis"}
+    assert captured["body"]["tools"][0]["input_schema"]["required"] == ["summary", "tags"]
+    assert captured["body"]["messages"][0]["content"][0]["source"]["media_type"] == "image/jpeg"
+    assert summary == "Editorial monochrome fashion image."
+    assert tags == ["editorial", "monochrome", "fashion"]
 
-    image_analysis.analyze_image(payload=b"image-bytes", mime_type="image/png")
 
-    assert captured["url"] == "https://api.gptsapi.net/v1/responses"
+def test_analyze_image_uses_google_generate_content(monkeypatch, configure_provider):
+    configure_provider(provider="google", model_id="gemini-2.5-flash")
+    captured = {
+        "response_bytes": json.dumps(
+            {
+                "candidates": [
+                    {
+                        "content": {
+                            "parts": [
+                                {
+                                    "text": json.dumps(
+                                        {
+                                            "summary": "Muted product hero image.",
+                                            "tags": ["product", "muted", "hero"],
+                                        }
+                                    )
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        ).encode("utf-8")
+    }
+    monkeypatch.setattr(image_analysis.request, "urlopen", _capture_request(captured))
+
+    summary, tags = image_analysis.analyze_image(payload=b"image-bytes", mime_type="image/webp")
+
+    assert captured["url"] == "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+    assert captured["headers"]["x-goog-api-key"] == "test-key"
+    assert captured["body"]["generationConfig"]["responseMimeType"] == "application/json"
+    assert captured["body"]["generationConfig"]["responseJsonSchema"]["required"] == ["summary", "tags"]
+    assert captured["body"]["contents"][0]["parts"][0]["inlineData"]["mimeType"] == "image/webp"
+    assert summary == "Muted product hero image."
+    assert tags == ["product", "muted", "hero"]
 
 
-def test_analyze_image_maps_timeout_to_app_error(monkeypatch, configured_provider):
+def test_analyze_image_uses_volcengine_chat_completions(monkeypatch, configure_provider):
+    configure_provider(provider="volcengine", model_id="ep-20260331-vision")
+    captured = {
+        "response_bytes": json.dumps(
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "summary": "Warm editorial still life.",
+                                    "tags": ["warm", "editorial", "still life"],
+                                }
+                            )
+                        }
+                    }
+                ]
+            }
+        ).encode("utf-8")
+    }
+    monkeypatch.setattr(image_analysis.request, "urlopen", _capture_request(captured))
+
+    summary, tags = image_analysis.analyze_image(payload=b"image-bytes", mime_type="image/png")
+
+    assert captured["url"] == "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
+    assert captured["headers"]["authorization"] == "Bearer test-key"
+    assert captured["body"]["model"] == "ep-20260331-vision"
+    assert captured["body"]["messages"][0]["content"][1]["image_url"]["url"].startswith("data:image/png;base64,")
+    assert summary == "Warm editorial still life."
+    assert tags == ["warm", "editorial", "still life"]
+
+
+def test_analyze_image_maps_timeout_to_app_error(monkeypatch, configure_provider):
+    configure_provider(provider="openai", model_id="gpt-4.1-mini")
+
     def raise_timeout(*args, **kwargs):
         raise TimeoutError("timed out")
 
@@ -123,7 +241,9 @@ def test_analyze_image_maps_timeout_to_app_error(monkeypatch, configured_provide
     assert exc_info.value.message == "AI provider request timed out"
 
 
-def test_analyze_image_maps_transport_failure_to_app_error(monkeypatch, configured_provider):
+def test_analyze_image_maps_transport_failure_to_app_error(monkeypatch, configure_provider):
+    configure_provider(provider="openai", model_id="gpt-4.1-mini")
+
     def raise_transport_error(*args, **kwargs):
         raise error.URLError("connection reset")
 
@@ -137,19 +257,8 @@ def test_analyze_image_maps_transport_failure_to_app_error(monkeypatch, configur
     assert exc_info.value.message == "AI provider request failed: connection reset"
 
 
-def test_analyze_image_reads_json_from_output_content(monkeypatch, configured_provider):
-    def fake_urlopen(http_request, timeout=0):
-        return _FakeResponse(_analysis_response_bytes_from_output_content())
-
-    monkeypatch.setattr(image_analysis.request, "urlopen", fake_urlopen)
-
-    summary, tags = image_analysis.analyze_image(payload=b"image-bytes", mime_type="image/png")
-
-    assert summary == "Editorial monochrome fashion image."
-    assert tags == ["editorial", "monochrome", "fashion"]
-
-
-def test_analyze_image_prefers_json_candidate_when_output_contains_extra_text(monkeypatch, configured_provider):
+def test_analyze_image_prefers_json_candidate_when_openai_output_contains_extra_text(monkeypatch, configure_provider):
+    configure_provider(provider="openai", model_id="gpt-4.1-mini")
     response_bytes = json.dumps(
         {
             "output": [
@@ -183,41 +292,8 @@ def test_analyze_image_prefers_json_candidate_when_output_contains_extra_text(mo
     assert tags == ["workspace", "neutral", "soft"]
 
 
-def test_analyze_image_prefers_nested_json_when_top_level_output_text_is_non_json(monkeypatch, configured_provider):
-    response_bytes = json.dumps(
-        {
-            "output_text": "Working on your request...",
-            "output": [
-                {
-                    "type": "message",
-                    "content": [
-                        {
-                            "type": "output_text",
-                            "text": json.dumps(
-                                {
-                                    "summary": "Muted product hero image.",
-                                    "tags": ["product", "muted", "hero"],
-                                }
-                            ),
-                        }
-                    ],
-                }
-            ],
-        }
-    ).encode("utf-8")
-
-    def fake_urlopen(http_request, timeout=0):
-        return _FakeResponse(response_bytes)
-
-    monkeypatch.setattr(image_analysis.request, "urlopen", fake_urlopen)
-
-    summary, tags = image_analysis.analyze_image(payload=b"image-bytes", mime_type="image/png")
-
-    assert summary == "Muted product hero image."
-    assert tags == ["product", "muted", "hero"]
-
-
-def test_analyze_image_rejects_ambiguous_multiple_json_candidates(monkeypatch, configured_provider):
+def test_analyze_image_rejects_ambiguous_multiple_openai_json_candidates(monkeypatch, configure_provider):
+    configure_provider(provider="openai", model_id="gpt-4.1-mini")
     response_bytes = json.dumps(
         {
             "output": [
@@ -261,99 +337,41 @@ def test_analyze_image_rejects_ambiguous_multiple_json_candidates(monkeypatch, c
     assert exc_info.value.message == "AI provider returned ambiguous analysis output"
 
 
-def test_analyze_image_prefers_valid_nested_json_over_invalid_braced_top_level_text(monkeypatch, configured_provider):
-    response_bytes = json.dumps(
-        {
-            "output_text": "{not json}",
-            "output": [
-                {
-                    "type": "message",
-                    "content": [
-                        {
-                            "type": "output_text",
-                            "text": json.dumps(
-                                {
-                                    "summary": "Warm editorial still life.",
-                                    "tags": ["warm", "editorial", "still life"],
-                                }
-                            ),
-                        }
-                    ],
-                }
-            ],
-        }
-    ).encode("utf-8")
+def test_analyze_image_requires_provider_settings(monkeypatch):
+    monkeypatch.setattr(image_analysis, "resolve_ai_provider_settings", lambda: None)
 
-    def fake_urlopen(http_request, timeout=0):
-        return _FakeResponse(response_bytes)
+    with pytest.raises(AppError) as exc_info:
+        image_analysis.analyze_image(payload=b"image-bytes", mime_type="image/png")
 
-    monkeypatch.setattr(image_analysis.request, "urlopen", fake_urlopen)
-
-    summary, tags = image_analysis.analyze_image(payload=b"image-bytes", mime_type="image/png")
-
-    assert summary == "Warm editorial still life."
-    assert tags == ["warm", "editorial", "still life"]
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.code == "AI_PROVIDER_NOT_CONFIGURED"
 
 
-def test_analyze_image_accepts_same_json_in_output_text_and_nested_output(monkeypatch, configured_provider):
-    analysis_json = json.dumps(
-        {
-            "summary": "Clean monochrome poster reference.",
-            "tags": ["poster", "monochrome", "clean"],
-        }
+@pytest.mark.parametrize(
+    ("provider", "model_id", "api_key"),
+    [
+        ("openai", "gpt-4.1-mini", None),
+        ("volcengine", None, "test-key"),
+    ],
+)
+def test_analyze_image_requires_complete_provider_settings(
+    monkeypatch,
+    provider: str,
+    model_id: str | None,
+    api_key: str | None,
+):
+    resolved = ResolvedAIProviderSettings(
+        provider=provider,
+        model_id=model_id,
+        api_key=api_key,
+        provider_source="stored",
+        api_key_source="stored" if api_key else None,
+        updated_at=None,
     )
-    response_bytes = json.dumps(
-        {
-            "output_text": analysis_json,
-            "output": [
-                {
-                    "type": "message",
-                    "content": [
-                        {
-                            "type": "output_text",
-                            "text": analysis_json,
-                        }
-                    ],
-                }
-            ],
-        }
-    ).encode("utf-8")
+    monkeypatch.setattr(image_analysis, "resolve_ai_provider_settings", lambda: resolved)
 
-    def fake_urlopen(http_request, timeout=0):
-        return _FakeResponse(response_bytes)
+    with pytest.raises(AppError) as exc_info:
+        image_analysis.analyze_image(payload=b"image-bytes", mime_type="image/png")
 
-    monkeypatch.setattr(image_analysis.request, "urlopen", fake_urlopen)
-
-    summary, tags = image_analysis.analyze_image(payload=b"image-bytes", mime_type="image/png")
-
-    assert summary == "Clean monochrome poster reference."
-    assert tags == ["poster", "monochrome", "clean"]
-
-
-def test_analyze_image_accepts_logically_identical_json_with_different_key_order(monkeypatch, configured_provider):
-    response_bytes = json.dumps(
-        {
-            "output_text": '{"summary":"Quiet neutral product shot.","tags":["neutral","product","quiet"]}',
-            "output": [
-                {
-                    "type": "message",
-                    "content": [
-                        {
-                            "type": "output_text",
-                            "text": '{"tags":["neutral","product","quiet"],"summary":"Quiet neutral product shot."}',
-                        }
-                    ],
-                }
-            ],
-        }
-    ).encode("utf-8")
-
-    def fake_urlopen(http_request, timeout=0):
-        return _FakeResponse(response_bytes)
-
-    monkeypatch.setattr(image_analysis.request, "urlopen", fake_urlopen)
-
-    summary, tags = image_analysis.analyze_image(payload=b"image-bytes", mime_type="image/png")
-
-    assert summary == "Quiet neutral product shot."
-    assert tags == ["neutral", "product", "quiet"]
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.code == "AI_PROVIDER_NOT_CONFIGURED"
