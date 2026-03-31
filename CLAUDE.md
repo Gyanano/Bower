@@ -40,15 +40,16 @@ OpenAPI docs available at http://localhost:8000/docs when server is running.
 
 **Backend** (`apps/server/.env` — see `.env.example`):
 
-Set `BOWER_AI_PROVIDER` to one of `openai`, `gemini`, or `doubao`, then supply the matching vars:
+AI provider config is now managed via the in-app settings UI at `/settings/ai`. The legacy env var path remains as a fallback:
 
-| Provider | Key var | Model var | Base URL var | Default base URL |
-|----------|---------|-----------|--------------|-----------------|
-| `openai` | `BOWER_OPENAI_API_KEY` | `BOWER_OPENAI_MODEL` (`gpt-4.1-mini`) | `BOWER_OPENAI_BASE_URL` | `https://api.openai.com` |
-| `gemini` | `BOWER_GEMINI_API_KEY` | `BOWER_GEMINI_MODEL` (`gemini-2.0-flash`) | `BOWER_GEMINI_BASE_URL` | `https://generativelanguage.googleapis.com` |
-| `doubao` | `BOWER_DOUBAO_API_KEY` | `BOWER_DOUBAO_MODEL` (`doubao-vision-pro-32k`) | `BOWER_DOUBAO_BASE_URL` | `https://ark.cn-beijing.volces.com/api/v3` |
+| Provider | `BOWER_AI_PROVIDER` | Key var | Model var |
+|----------|---------------------|---------|-----------|
+| OpenAI | `openai` | `BOWER_OPENAI_API_KEY` | `BOWER_OPENAI_MODEL` (`gpt-4.1-mini`) |
+| Anthropic | `anthropic` | `BOWER_ANTHROPIC_API_KEY` | `BOWER_ANTHROPIC_MODEL` (`claude-3-5-haiku-latest`) |
+| Google AI Studio | `google` | `BOWER_GOOGLE_API_KEY` or `BOWER_GEMINI_API_KEY` | `BOWER_GOOGLE_MODEL` or `BOWER_GEMINI_MODEL` (`gemini-2.5-flash`) |
+| ByteDance Volcano / Ark | `volcengine` | `BOWER_VOLCENGINE_API_KEY` or `BOWER_ARK_API_KEY` | `BOWER_VOLCENGINE_MODEL` or `BOWER_ARK_MODEL` |
 
-OpenAI uses the Responses API (`/v1/responses`). Doubao uses the OpenAI Chat Completions-compatible API (`{base_url}/chat/completions`). Gemini uses the Google Generative AI API (`/v1beta/models/{model}:generateContent`). All base URL vars support custom values for proxies or compatible endpoints.
+OpenAI also accepts `BOWER_OPENAI_BASE_URL` for proxy/compatible endpoints. The preferred path is the UI at `/settings/ai` — env vars are legacy-only.
 
 **Frontend** (`apps/web/.env.local`):
 ```
@@ -91,7 +92,7 @@ lib/format.ts      → Date/URL formatting utilities
 5. Returns `InspirationDetailEnvelope`
 
 ### AI analysis flow
-`POST /api/v1/inspirations/{id}/analyze` → reads file from CAS → base64 encodes → sends to OpenAI with JSON schema for structured output (summary + tags) → updates DB columns `analysis_summary`, `analysis_tags_json`, `analyzed_at`
+`POST /api/v1/inspirations/{id}/analyze` → reads file from CAS → base64 encodes → dispatches to the configured provider (OpenAI Responses API / Anthropic Messages API / Google generateContent / Volcengine chat completions) → structured output (summary + tags) → updates DB columns `analysis_summary`, `analysis_tags_json`, `analyzed_at`
 
 ## Key Conventions
 

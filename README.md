@@ -18,7 +18,7 @@ A local-first design style asset management system. Upload inspiration images, a
 | Backend | Python FastAPI, Uvicorn |
 | Database | SQLite (local file) |
 | File storage | Local filesystem (content-addressable) |
-| AI | OpenAI / Gemini / 豆包，all with custom base URL support |
+| AI | OpenAI / Anthropic / Google AI Studio / ByteDance Volcano |
 | Monorepo | pnpm workspaces + Turbo |
 | Python env | uv |
 
@@ -42,30 +42,30 @@ npm run sync:server
 
 ### Configure
 
-Copy `.env.example` in `apps/server/` and set the variables for your chosen AI provider:
+AI provider is configured in-app at `/settings/ai` after starting the server — no env files needed for normal use.
 
-**OpenAI**
+For the legacy env var path (or CI), copy `apps/server/.env.example` and set:
+
 ```bash
-BOWER_AI_PROVIDER=openai
+# Choose one provider
+BOWER_AI_PROVIDER=openai        # or: anthropic, google, volcengine
+
+# OpenAI
 BOWER_OPENAI_API_KEY=your-key
-BOWER_OPENAI_MODEL=gpt-4.1-mini         # optional
+BOWER_OPENAI_MODEL=gpt-4.1-mini          # optional
 BOWER_OPENAI_BASE_URL=https://api.openai.com  # optional, for proxies
-```
 
-**Google Gemini**
-```bash
-BOWER_AI_PROVIDER=gemini
-BOWER_GEMINI_API_KEY=your-key
-BOWER_GEMINI_MODEL=gemini-2.0-flash     # optional
-BOWER_GEMINI_BASE_URL=https://generativelanguage.googleapis.com  # optional
-```
+# Anthropic
+BOWER_ANTHROPIC_API_KEY=your-key
+BOWER_ANTHROPIC_MODEL=claude-3-5-haiku-latest  # optional
 
-**豆包 (Doubao / ByteDance Ark)**
-```bash
-BOWER_AI_PROVIDER=doubao
-BOWER_DOUBAO_API_KEY=your-key
-BOWER_DOUBAO_MODEL=doubao-vision-pro-32k  # optional
-BOWER_DOUBAO_BASE_URL=https://ark.cn-beijing.volces.com/api/v3   # optional
+# Google AI Studio
+BOWER_GOOGLE_API_KEY=your-key
+BOWER_GOOGLE_MODEL=gemini-2.5-flash      # optional
+
+# ByteDance Volcano / Ark
+BOWER_ARK_API_KEY=your-key
+BOWER_ARK_MODEL=your-endpoint-id        # required (no default)
 ```
 
 **Frontend**
@@ -100,7 +100,7 @@ apps/
   server/    FastAPI backend
 docs/
   Architecture.md    Design decisions and rationale
-  TASKS/             Build specifications and roadmap
+  QA/                Smoke test checklist
 ```
 
 See `docs/Architecture.md` for a full explanation of architectural decisions.
