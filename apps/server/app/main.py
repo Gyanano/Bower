@@ -4,8 +4,10 @@ from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.routes.boards import router as boards_router
 from app.api.routes.inspirations import router as inspirations_router
 from app.api.routes.settings_ai import router as settings_ai_router
+from app.api.routes.settings_preferences import router as settings_preferences_router
 from app.db.sqlite import initialize_database
 from app.errors import AppError, app_error_handler, request_validation_error_handler
 
@@ -16,7 +18,7 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title="Bower MVP Foundation API", lifespan=lifespan)
+app = FastAPI(title="Bower API", lifespan=lifespan)
 app.add_exception_handler(AppError, app_error_handler)
 app.add_exception_handler(RequestValidationError, request_validation_error_handler)
 
@@ -40,4 +42,6 @@ def healthcheck():
 
 
 app.include_router(inspirations_router, prefix="/api/v1")
+app.include_router(boards_router, prefix="/api/v1")
 app.include_router(settings_ai_router, prefix="/api/v1")
+app.include_router(settings_preferences_router, prefix="/api/v1")

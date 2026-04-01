@@ -1,66 +1,60 @@
-import Link from "next/link";
-import { getApiErrorMessage, getInspirations } from "@/lib/api";
-import { formatUtcTimestamp } from "@/lib/format";
+import { WorkspaceClient } from "@/components/workspace-client";
+import {
+  getApiErrorMessage,
+  getAppPreferences,
+  getBoards,
+  getInspiration,
+  getInspirations,
+} from "@/lib/api";
+import { getDictionary } from "@/lib/i18n";
 
 export default async function InspirationsPage({ searchParams }: PageProps<"/inspirations">) {
-  const resolvedSearchParams = searchParams ? await searchParams : undefined;
-  const status = resolvedSearchParams?.status === "archived" ? "archived" : "active";
-  let result: Awaited<ReturnType<typeof getInspirations>>;
+  const params = searchParams ? await searchParams : undefined;
+  const status = params?.status === "archived" ? "archived" : "active";
+  const query = typeof params?.q === "string" ? params.q : "";
+  const boardId = typeof params?.board === "string" ? params.board : "";
+  const selectedId = typeof params?.selected === "string" ? params.selected : "";
+  const composeOpen = params?.compose === "1";
 
-  try {
-    result = await getInspirations(status);
-  } catch (error) {
+  const [preferencesResult, boardsResult, listResult] = await Promise.allSettled([
+    getAppPreferences(),
+    getBoards(),
+    getInspirations({
+      board_id: boardId || undefined,
+      q: query || undefined,
+      status,
+    }),
+  ]);
+
+  const language = preferencesResult.status === "fulfilled" ? preferencesResult.value.data.ui_language : "zh-CN";
+  const copy = getDictionary(language);
+
+  if (listResult.status === "rejected") {
     return (
-      <main className="stack">
-        <section className="card stack">
-          <div>
-            <h1>Saved inspirations</h1>
-            <p className="muted">Could not load inspirations right now.</p>
-          </div>
-          <p className="muted">{getApiErrorMessage(error)}</p>
-          <Link href="/upload">Try uploading a new inspiration</Link>
-        </section>
+      <main className="page-state">
+        <h1>{copy.allInspirations}</h1>
+        <p>{getApiErrorMessage(listResult.reason)}</p>
       </main>
     );
   }
 
+  const selectedItem =
+    selectedId
+      ? await getInspiration(selectedId)
+          .then((result) => result.data)
+          .catch(() => null)
+      : null;
+
   return (
-    <main className="stack">
-      <section className="card stack">
-        <div>
-          <h1>{status === "archived" ? "Archived inspirations" : "Saved inspirations"}</h1>
-          <p className="muted">Total {status}: {result.meta.total}</p>
-        </div>
-
-        <div className="tabs">
-          <Link className={status === "active" ? "tab tab-active" : "tab"} href="/inspirations">
-            Active
-          </Link>
-          <Link className={status === "archived" ? "tab tab-active" : "tab"} href="/inspirations?status=archived">
-            Archived
-          </Link>
-        </div>
-
-        {result.data.length === 0 ? (
-          <p className="muted">
-            {status === "archived" ? "No archived inspirations yet." : "No active inspirations saved yet."}
-          </p>
-        ) : (
-          <div className="grid">
-            {result.data.map((item) => (
-              <Link className="card stack" href={`/inspirations/${item.id}`} key={item.id}>
-                <div>
-                  <strong>{item.title || item.original_filename}</strong>
-                </div>
-                <div className="muted">{item.original_filename}</div>
-                <div className="muted">{item.mime_type}</div>
-                <div className="muted">Status: {item.status}</div>
-                <div className="muted">{formatUtcTimestamp(item.created_at)}</div>
-              </Link>
-            ))}
-          </div>
-        )}
-      </section>
-    </main>
+    <WorkspaceClient
+      boards={boardsResult.status === "fulfilled" ? boardsResult.value.data : []}
+      composeOpen={composeOpen}
+      copy={copy}
+      items={listResult.value.data}
+      language={language}
+      query={query}
+      selectedItem={selectedItem}
+      status={status}
+    />
   );
 }

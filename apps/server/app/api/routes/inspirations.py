@@ -37,8 +37,14 @@ async def upload_inspiration(
 
 
 @router.get("", response_model=InspirationListEnvelope)
-def fetch_inspirations(limit: int = 20, offset: int = 0, status: str = "active"):
-    return list_inspirations(limit=limit, offset=offset, status=status)
+def fetch_inspirations(
+    limit: int = 20,
+    offset: int = 0,
+    status: str = "active",
+    q: str | None = None,
+    board_id: str | None = None,
+):
+    return list_inspirations(limit=limit, offset=offset, status=status, q=q, board_id=board_id)
 
 
 @router.get("/{inspiration_id}", response_model=InspirationDetailEnvelope, responses={404: {"model": ErrorEnvelope}})

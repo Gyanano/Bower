@@ -1,26 +1,20 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { getAppPreferences } from "@/lib/api";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Bower MVP Foundation",
-  description: "Local-first inspiration upload foundation",
+  title: "Bower",
+  description: "Local-first inspiration workspace",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const uiLanguage = await getAppPreferences()
+    .then((result) => result.data.ui_language)
+    .catch(() => "zh-CN" as const);
+
   return (
-    <html lang="en">
-      <body>
-        <div className="shell">
-          <nav className="nav">
-            <Link href="/">Home</Link>
-            <Link href="/upload">Upload</Link>
-            <Link href="/inspirations">Inspirations</Link>
-            <Link href="/settings/ai">AI settings</Link>
-          </nav>
-          {children}
-        </div>
-      </body>
+    <html lang={uiLanguage}>
+      <body>{children}</body>
     </html>
   );
 }

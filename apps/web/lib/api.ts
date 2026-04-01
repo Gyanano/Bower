@@ -1,7 +1,16 @@
 export type AIProvider = "openai" | "anthropic" | "google" | "volcengine";
+export type UILanguage = "zh-CN" | "en";
+
+export interface Board {
+  id: string;
+  name: string;
+  slug: string;
+}
 
 export interface InspirationListItem {
   id: string;
+  board_id: string | null;
+  board_name: string | null;
   title: string | null;
   status: "active" | "archived";
   original_filename: string;
@@ -9,6 +18,12 @@ export interface InspirationListItem {
   file_size_bytes: number;
   created_at: string;
   updated_at: string;
+  analyzed_at: string | null;
+  file_url: string;
+  analysis_status: "idle" | "processing" | "completed" | "failed";
+  analysis_error: string | null;
+  analysis_tags_en: string[];
+  analysis_tags_zh: string[];
 }
 
 export interface InspirationDetail extends InspirationListItem {
@@ -16,9 +31,10 @@ export interface InspirationDetail extends InspirationListItem {
   source_url: string | null;
   analysis_summary: string | null;
   analysis_tags: string[];
+  analysis_prompt_en: string | null;
+  analysis_prompt_zh: string | null;
+  analysis_colors: string[];
   storage_key: string;
-  file_url: string;
-  analyzed_at: string | null;
   archived_at: string | null;
 }
 
@@ -26,6 +42,7 @@ export interface InspirationMetadataPatch {
   title?: string | null;
   notes?: string | null;
   source_url?: string | null;
+  board_id?: string | null;
 }
 
 export interface AISettings {
@@ -43,6 +60,24 @@ export interface AISettingsUpdate {
   model_id?: string | null;
   api_key?: string;
   clear_api_key?: boolean;
+}
+
+export interface AISettingsTestRequest {
+  provider: AIProvider;
+  model_id?: string | null;
+  api_key?: string | null;
+}
+
+export interface AISettingsTestResult {
+  success: boolean;
+  provider: AIProvider;
+  model_id: string | null;
+  message: string;
+}
+
+export interface AppPreferences {
+  ui_language: UILanguage;
+  updated_at: string | null;
 }
 
 interface ApiErrorEnvelope {
@@ -100,9 +135,26 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
-export async function getInspirations(status: "active" | "archived" = "active") {
+export async function getInspirations(params?: {
+  status?: "active" | "archived";
+  q?: string;
+  board_id?: string;
+  limit?: number;
+  offset?: number;
+}) {
+  const searchParams = new URLSearchParams();
+  searchParams.set("status", params?.status ?? "active");
+  searchParams.set("limit", String(params?.limit ?? 40));
+  searchParams.set("offset", String(params?.offset ?? 0));
+  if (params?.q) {
+    searchParams.set("q", params.q);
+  }
+  if (params?.board_id) {
+    searchParams.set("board_id", params.board_id);
+  }
+
   return apiFetch<{ data: InspirationListItem[]; meta: { limit: number; offset: number; total: number } }>(
-    `/inspirations?status=${status}`,
+    `/inspirations?${searchParams.toString()}`,
   );
 }
 
@@ -110,8 +162,36 @@ export async function getInspiration(id: string) {
   return apiFetch<{ data: InspirationDetail }>(`/inspirations/${id}`);
 }
 
+export async function getBoards() {
+  return apiFetch<{ data: Board[] }>("/boards");
+}
+
 export async function getAiSettings() {
   return apiFetch<{ data: AISettings }>("/settings/ai");
+}
+
+export async function testAiSettings(payload: AISettingsTestRequest) {
+  return apiFetch<{ data: AISettingsTestResult }>("/settings/ai/test", {
+    body: JSON.stringify(payload),
+    headers: {
+      "content-type": "application/json",
+    },
+    method: "POST",
+  });
+}
+
+export async function getAppPreferences() {
+  return apiFetch<{ data: AppPreferences }>("/settings/preferences");
+}
+
+export async function updateAppPreferences(payload: { ui_language: UILanguage }) {
+  return apiFetch<{ data: AppPreferences }>("/settings/preferences", {
+    body: JSON.stringify(payload),
+    headers: {
+      "content-type": "application/json",
+    },
+    method: "PUT",
+  });
 }
 
 export async function createInspiration(formData: FormData) {

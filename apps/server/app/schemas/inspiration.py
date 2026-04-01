@@ -5,6 +5,8 @@ class InspirationBase(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
+    board_id: str | None = None
+    board_name: str | None = None
     title: str | None = None
     status: str
     original_filename: str
@@ -12,6 +14,12 @@ class InspirationBase(BaseModel):
     file_size_bytes: int
     created_at: str
     updated_at: str
+    analyzed_at: str | None = None
+    file_url: str
+    analysis_status: str = "idle"
+    analysis_error: str | None = None
+    analysis_tags_en: list[str] = Field(default_factory=list)
+    analysis_tags_zh: list[str] = Field(default_factory=list)
 
 
 class InspirationListItem(InspirationBase):
@@ -23,9 +31,10 @@ class InspirationDetail(InspirationBase):
     source_url: str | None = None
     analysis_summary: str | None = None
     analysis_tags: list[str] = Field(default_factory=list)
+    analysis_prompt_en: str | None = None
+    analysis_prompt_zh: str | None = None
+    analysis_colors: list[str] = Field(default_factory=list)
     storage_key: str
-    file_url: str
-    analyzed_at: str | None = None
     archived_at: str | None = None
 
 
@@ -33,6 +42,7 @@ class InspirationMetadataPatch(BaseModel):
     title: str | None = None
     notes: str | None = None
     source_url: str | None = None
+    board_id: str | None = None
 
 
 class PaginationMeta(BaseModel):

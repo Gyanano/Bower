@@ -57,31 +57,40 @@ def _capture_request(captured: dict):
     return fake_urlopen
 
 
+def _analysis_payload(summary: str, tags: list[str]) -> dict[str, object]:
+    return {
+        "summary": summary,
+        "prompt_en": f"{summary} in English prompt form.",
+        "prompt_zh": f"{summary} 的中文提示词版本。",
+        "tags_en": tags,
+        "tags_zh": [f"{tag}-zh" for tag in tags],
+        "colors": ["#E8E8ED", "#8E8E93", "#1C1C1E"],
+    }
+
+
 def test_analyze_image_uses_openai_responses_api(monkeypatch, configure_provider):
     configure_provider(provider="openai", model_id="gpt-4.1-mini")
     captured = {
         "response_bytes": json.dumps(
             {
                 "output_text": json.dumps(
-                    {
-                        "summary": "Minimal living room scene.",
-                        "tags": ["interior", "minimal", "living room"],
-                    }
+                    _analysis_payload("Minimal living room scene.", ["interior", "minimal", "living room"])
                 )
             }
         ).encode("utf-8")
     }
     monkeypatch.setattr(image_analysis.request, "urlopen", _capture_request(captured))
 
-    summary, tags = image_analysis.analyze_image(payload=b"image-bytes", mime_type="image/png")
+    analysis = image_analysis.analyze_image(payload=b"image-bytes", mime_type="image/png")
 
     assert captured["url"] == "https://api.openai.com/v1/responses"
     assert captured["headers"]["authorization"] == "Bearer test-key"
     assert captured["body"]["model"] == "gpt-4.1-mini"
     assert captured["body"]["text"]["format"]["type"] == "json_schema"
     assert captured["body"]["input"][0]["content"][1]["image_url"].startswith("data:image/png;base64,")
-    assert summary == "Minimal living room scene."
-    assert tags == ["interior", "minimal", "living room"]
+    assert analysis["summary"] == "Minimal living room scene."
+    assert analysis["tags_en"] == ["interior", "minimal", "living room"]
+    assert analysis["prompt_zh"] == "Minimal living room scene. 的中文提示词版本。"
 
 
 @pytest.mark.parametrize(
@@ -108,10 +117,7 @@ def test_analyze_image_uses_legacy_openai_base_url_when_present(
         "response_bytes": json.dumps(
             {
                 "output_text": json.dumps(
-                    {
-                        "summary": "Minimal living room scene.",
-                        "tags": ["interior", "minimal", "living room"],
-                    }
+                    _analysis_payload("Minimal living room scene.", ["interior", "minimal", "living room"])
                 )
             }
         ).encode("utf-8")
@@ -133,8 +139,7 @@ def test_analyze_image_uses_anthropic_messages_api(monkeypatch, configure_provid
                         "type": "tool_use",
                         "name": "inspiration_analysis",
                         "input": {
-                            "summary": "Editorial monochrome fashion image.",
-                            "tags": ["editorial", "monochrome", "fashion"],
+                            **_analysis_payload("Editorial monochrome fashion image.", ["editorial", "monochrome", "fashion"]),
                         },
                     }
                 ]
@@ -143,17 +148,17 @@ def test_analyze_image_uses_anthropic_messages_api(monkeypatch, configure_provid
     }
     monkeypatch.setattr(image_analysis.request, "urlopen", _capture_request(captured))
 
-    summary, tags = image_analysis.analyze_image(payload=b"image-bytes", mime_type="image/jpeg")
+    analysis = image_analysis.analyze_image(payload=b"image-bytes", mime_type="image/jpeg")
 
     assert captured["url"] == "https://api.anthropic.com/v1/messages"
     assert captured["headers"]["x-api-key"] == "test-key"
     assert captured["headers"]["anthropic-version"] == "2023-06-01"
     assert captured["body"]["model"] == "claude-3-5-haiku-latest"
     assert captured["body"]["tool_choice"] == {"type": "tool", "name": "inspiration_analysis"}
-    assert captured["body"]["tools"][0]["input_schema"]["required"] == ["summary", "tags"]
+    assert captured["body"]["tools"][0]["input_schema"]["required"] == ["summary", "prompt_en", "prompt_zh", "tags_en", "tags_zh", "colors"]
     assert captured["body"]["messages"][0]["content"][0]["source"]["media_type"] == "image/jpeg"
-    assert summary == "Editorial monochrome fashion image."
-    assert tags == ["editorial", "monochrome", "fashion"]
+    assert analysis["summary"] == "Editorial monochrome fashion image."
+    assert analysis["tags_en"] == ["editorial", "monochrome", "fashion"]
 
 
 def test_analyze_image_uses_google_generate_content(monkeypatch, configure_provider):
@@ -167,10 +172,7 @@ def test_analyze_image_uses_google_generate_content(monkeypatch, configure_provi
                             "parts": [
                                 {
                                     "text": json.dumps(
-                                        {
-                                            "summary": "Muted product hero image.",
-                                            "tags": ["product", "muted", "hero"],
-                                        }
+                                        _analysis_payload("Muted product hero image.", ["product", "muted", "hero"])
                                     )
                                 }
                             ]
@@ -182,15 +184,15 @@ def test_analyze_image_uses_google_generate_content(monkeypatch, configure_provi
     }
     monkeypatch.setattr(image_analysis.request, "urlopen", _capture_request(captured))
 
-    summary, tags = image_analysis.analyze_image(payload=b"image-bytes", mime_type="image/webp")
+    analysis = image_analysis.analyze_image(payload=b"image-bytes", mime_type="image/webp")
 
     assert captured["url"] == "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
     assert captured["headers"]["x-goog-api-key"] == "test-key"
     assert captured["body"]["generationConfig"]["responseMimeType"] == "application/json"
-    assert captured["body"]["generationConfig"]["responseJsonSchema"]["required"] == ["summary", "tags"]
+    assert captured["body"]["generationConfig"]["responseJsonSchema"]["required"] == ["summary", "prompt_en", "prompt_zh", "tags_en", "tags_zh", "colors"]
     assert captured["body"]["contents"][0]["parts"][0]["inlineData"]["mimeType"] == "image/webp"
-    assert summary == "Muted product hero image."
-    assert tags == ["product", "muted", "hero"]
+    assert analysis["summary"] == "Muted product hero image."
+    assert analysis["tags_zh"] == ["product-zh", "muted-zh", "hero-zh"]
 
 
 def test_analyze_image_uses_volcengine_chat_completions(monkeypatch, configure_provider):
@@ -201,28 +203,25 @@ def test_analyze_image_uses_volcengine_chat_completions(monkeypatch, configure_p
                 "choices": [
                     {
                         "message": {
-                            "content": json.dumps(
-                                {
-                                    "summary": "Warm editorial still life.",
-                                    "tags": ["warm", "editorial", "still life"],
-                                }
-                            )
+                                "content": json.dumps(
+                                    _analysis_payload("Warm editorial still life.", ["warm", "editorial", "still life"])
+                                )
+                            }
                         }
-                    }
                 ]
             }
         ).encode("utf-8")
     }
     monkeypatch.setattr(image_analysis.request, "urlopen", _capture_request(captured))
 
-    summary, tags = image_analysis.analyze_image(payload=b"image-bytes", mime_type="image/png")
+    analysis = image_analysis.analyze_image(payload=b"image-bytes", mime_type="image/png")
 
     assert captured["url"] == "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
     assert captured["headers"]["authorization"] == "Bearer test-key"
     assert captured["body"]["model"] == "ep-20260331-vision"
     assert captured["body"]["messages"][0]["content"][1]["image_url"]["url"].startswith("data:image/png;base64,")
-    assert summary == "Warm editorial still life."
-    assert tags == ["warm", "editorial", "still life"]
+    assert analysis["summary"] == "Warm editorial still life."
+    assert analysis["colors"] == ["#E8E8ED", "#8E8E93", "#1C1C1E"]
 
 
 def test_analyze_image_maps_timeout_to_app_error(monkeypatch, configure_provider):
@@ -269,10 +268,7 @@ def test_analyze_image_prefers_json_candidate_when_openai_output_contains_extra_
                         {
                             "type": "output_text",
                             "text": json.dumps(
-                                {
-                                    "summary": "Soft neutral workspace photo.",
-                                    "tags": ["workspace", "neutral", "soft"],
-                                }
+                                _analysis_payload("Soft neutral workspace photo.", ["workspace", "neutral", "soft"])
                             ),
                         },
                     ],
@@ -286,10 +282,10 @@ def test_analyze_image_prefers_json_candidate_when_openai_output_contains_extra_
 
     monkeypatch.setattr(image_analysis.request, "urlopen", fake_urlopen)
 
-    summary, tags = image_analysis.analyze_image(payload=b"image-bytes", mime_type="image/png")
+    analysis = image_analysis.analyze_image(payload=b"image-bytes", mime_type="image/png")
 
-    assert summary == "Soft neutral workspace photo."
-    assert tags == ["workspace", "neutral", "soft"]
+    assert analysis["summary"] == "Soft neutral workspace photo."
+    assert analysis["tags_en"] == ["workspace", "neutral", "soft"]
 
 
 def test_analyze_image_rejects_ambiguous_multiple_openai_json_candidates(monkeypatch, configure_provider):
@@ -303,19 +299,13 @@ def test_analyze_image_rejects_ambiguous_multiple_openai_json_candidates(monkeyp
                         {
                             "type": "output_text",
                             "text": json.dumps(
-                                {
-                                    "summary": "First result.",
-                                    "tags": ["one", "two", "three"],
-                                }
+                                _analysis_payload("First result.", ["one", "two", "three"])
                             ),
                         },
                         {
                             "type": "output_text",
                             "text": json.dumps(
-                                {
-                                    "summary": "Second result.",
-                                    "tags": ["four", "five", "six"],
-                                }
+                                _analysis_payload("Second result.", ["four", "five", "six"])
                             ),
                         },
                     ],
@@ -375,3 +365,18 @@ def test_analyze_image_requires_complete_provider_settings(
 
     assert exc_info.value.status_code == 503
     assert exc_info.value.code == "AI_PROVIDER_NOT_CONFIGURED"
+
+
+def test_test_provider_connection_uses_openai(monkeypatch):
+    captured = {"response_bytes": json.dumps({"output": []}).encode("utf-8")}
+    monkeypatch.setattr(image_analysis.request, "urlopen", _capture_request(captured))
+
+    message = image_analysis.test_provider_connection(
+        provider="openai",
+        model_id="gpt-4.1-mini",
+        api_key="test-key",
+    )
+
+    assert message == "OpenAI connection successful"
+    assert captured["url"] == "https://api.openai.com/v1/responses"
+    assert captured["body"]["input"] == "Reply with OK"
