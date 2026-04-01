@@ -158,6 +158,21 @@ export async function getInspirations(params?: {
   );
 }
 
+export async function getAllInspirations(status: "active" | "archived", pageSize = 100) {
+  const items: InspirationListItem[] = [];
+  let offset = 0;
+  let total = 0;
+
+  do {
+    const result = await getInspirations({ limit: pageSize, offset, status });
+    items.push(...result.data);
+    total = result.meta.total;
+    offset += result.data.length;
+  } while (offset < total);
+
+  return items;
+}
+
 export async function getInspiration(id: string) {
   return apiFetch<{ data: InspirationDetail }>(`/inspirations/${id}`);
 }

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Icon } from "@/components/icons";
-import { getAppPreferences, getBoards, getInspirations } from "@/lib/api";
+import { getAllInspirations, getAppPreferences, getBoards } from "@/lib/api";
 import { formatUtcTimestamp } from "@/lib/format";
 import { getDictionary } from "@/lib/i18n";
 
@@ -8,8 +8,8 @@ export default async function InsightsPage() {
   const [preferencesResult, boardsResult, activeResult, archivedResult] = await Promise.allSettled([
     getAppPreferences(),
     getBoards(),
-    getInspirations({ status: "active", limit: 100 }),
-    getInspirations({ status: "archived", limit: 100 }),
+    getAllInspirations("active"),
+    getAllInspirations("archived"),
   ]);
 
   const preferences = preferencesResult.status === "fulfilled"
@@ -17,8 +17,8 @@ export default async function InsightsPage() {
     : { ui_language: "zh-CN" as const, updated_at: null };
   const copy = getDictionary(preferences.ui_language);
   const boards = boardsResult.status === "fulfilled" ? boardsResult.value.data : [];
-  const activeItems = activeResult.status === "fulfilled" ? activeResult.value.data : [];
-  const archivedItems = archivedResult.status === "fulfilled" ? archivedResult.value.data : [];
+  const activeItems = activeResult.status === "fulfilled" ? activeResult.value : [];
+  const archivedItems = archivedResult.status === "fulfilled" ? archivedResult.value : [];
   const allItems = [...activeItems, ...archivedItems];
   const analyzedCount = allItems.filter((item) => item.analysis_status === "completed").length;
   const recentAnalysisItems = [...allItems]
