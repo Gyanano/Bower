@@ -14,6 +14,7 @@ class InspirationBase(BaseModel):
     file_size_bytes: int
     created_at: str
     updated_at: str
+    analyzed_at: str | None = None
     file_url: str
     analysis_status: str = "idle"
     analysis_error: str | None = None
@@ -34,7 +35,6 @@ class InspirationDetail(InspirationBase):
     analysis_prompt_zh: str | None = None
     analysis_colors: list[str] = Field(default_factory=list)
     storage_key: str
-    analyzed_at: str | None = None
     archived_at: str | None = None
 
 

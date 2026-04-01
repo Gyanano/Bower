@@ -1,3 +1,4 @@
+import sqlite3
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -161,6 +162,32 @@ def test_patch_archive_and_delete_flows(client: TestClient):
     assert deleted.status_code == 204
     assert not stored_file.exists()
     assert client.get(f"/api/v1/inspirations/{inspiration_id}").status_code == 404
+
+
+def test_patch_allows_clearing_board_assignment_without_redefaulting(client: TestClient):
+    create_response = client.post(
+        "/api/v1/inspirations",
+        data={"title": "Boarded"},
+        files={"file": ("sample.png", PNG_BYTES, "image/png")},
+    )
+    inspiration_id = create_response.json()["data"]["id"]
+
+    moved = client.patch(f"/api/v1/inspirations/{inspiration_id}", json={"board_id": "board_landing"})
+    cleared = client.patch(f"/api/v1/inspirations/{inspiration_id}", json={"board_id": None})
+
+    assert moved.status_code == 200
+    assert moved.json()["data"]["board_id"] == "board_landing"
+    assert cleared.status_code == 200
+    assert cleared.json()["data"]["board_id"] is None
+    assert cleared.json()["data"]["board_name"] is None
+
+    sqlite.initialize_database()
+
+    detail = client.get(f"/api/v1/inspirations/{inspiration_id}")
+
+    assert detail.status_code == 200
+    assert detail.json()["data"]["board_id"] is None
+    assert detail.json()["data"]["board_name"] is None
 
 
 def test_create_rejects_unsafe_source_url(client: TestClient):
@@ -393,3 +420,100 @@ def test_delete_succeeds_when_file_cleanup_fails_after_metadata_delete(client: T
     assert deleted.status_code == 204
     assert stored_file.exists()
     assert client.get(f"/api/v1/inspirations/{inspiration_id}").status_code == 404
+
+
+def test_get_connection_enforces_foreign_keys_on_runtime_connections(client: TestClient):
+    client.post(
+        "/api/v1/inspirations",
+        data={"title": "Foreign Key Guard"},
+        files={"file": ("sample.png", PNG_BYTES, "image/png")},
+    )
+
+    with pytest.raises(sqlite3.IntegrityError):
+        with sqlite.get_connection() as connection:
+            connection.execute("DELETE FROM boards WHERE id = ?", ("board_app_ui",))
+            connection.commit()
+
+
+def test_initialize_database_backfills_legacy_analysis_fields(monkeypatch):
+    with TemporaryDirectory(ignore_cleanup_errors=True) as temp_dir_name:
+        temp_dir = Path(temp_dir_name)
+        data_dir = temp_dir / "data"
+
+        monkeypatch.setattr(sqlite, "DATA_DIR", data_dir)
+        monkeypatch.setattr(sqlite, "DATABASE_PATH", data_dir / "meta.db")
+
+        data_dir.mkdir(parents=True, exist_ok=True)
+        legacy_created_at = "2026-03-30T12:00:00Z"
+        legacy_analyzed_at = "2026-03-30T12:10:00Z"
+        legacy_tags_json = '["minimal", "editorial"]'
+
+        with sqlite3.connect(sqlite.DATABASE_PATH) as connection:
+            connection.execute(
+                """
+                CREATE TABLE inspirations (
+                    id TEXT PRIMARY KEY,
+                    title TEXT NULL,
+                    notes TEXT NULL,
+                    source_url TEXT NULL,
+                    analysis_summary TEXT NULL,
+                    analysis_tags_json TEXT NULL,
+                    original_filename TEXT NOT NULL,
+                    mime_type TEXT NOT NULL,
+                    file_size_bytes INTEGER NOT NULL,
+                    storage_key TEXT NOT NULL UNIQUE,
+                    created_at TEXT NOT NULL,
+                    analyzed_at TEXT NULL
+                )
+                """
+            )
+            connection.execute(
+                """
+                INSERT INTO inspirations (
+                    id,
+                    title,
+                    notes,
+                    source_url,
+                    analysis_summary,
+                    analysis_tags_json,
+                    original_filename,
+                    mime_type,
+                    file_size_bytes,
+                    storage_key,
+                    created_at,
+                    analyzed_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "ins_legacy",
+                    "Legacy analyzed",
+                    None,
+                    None,
+                    "Already analyzed before migration.",
+                    legacy_tags_json,
+                    "legacy.png",
+                    "image/png",
+                    len(PNG_BYTES),
+                    "store/aa/bb/legacy-file",
+                    legacy_created_at,
+                    legacy_analyzed_at,
+                ),
+            )
+            connection.commit()
+
+        sqlite.initialize_database()
+
+        with sqlite.get_connection() as connection:
+            migrated_row = connection.execute("SELECT * FROM inspirations WHERE id = 'ins_legacy'").fetchone()
+            board_row = connection.execute("SELECT created_at FROM boards WHERE id = 'board_app_ui'").fetchone()
+            preferences_row = connection.execute("SELECT updated_at FROM app_preferences WHERE id = 1").fetchone()
+
+        assert migrated_row["board_id"] == "board_app_ui"
+        assert migrated_row["updated_at"] == legacy_created_at
+        assert migrated_row["analysis_status"] == "completed"
+        assert migrated_row["analysis_tags_en_json"] == legacy_tags_json
+        assert migrated_row["analysis_tags_zh_json"] == legacy_tags_json
+        assert board_row is not None
+        assert "T" in board_row["created_at"] and board_row["created_at"].endswith("Z")
+        assert preferences_row is not None
+        assert "T" in preferences_row["updated_at"] and preferences_row["updated_at"].endswith("Z")

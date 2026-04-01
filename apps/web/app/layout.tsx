@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { getAppPreferences } from "@/lib/api";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -6,9 +7,13 @@ export const metadata: Metadata = {
   description: "Local-first inspiration workspace",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const uiLanguage = await getAppPreferences()
+    .then((result) => result.data.ui_language)
+    .catch(() => "zh-CN" as const);
+
   return (
-    <html lang="zh-CN">
+    <html lang={uiLanguage}>
       <body>{children}</body>
     </html>
   );

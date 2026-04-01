@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import {
   getApiErrorMessage,
@@ -50,6 +51,7 @@ export function SettingsClient({
   preferences: AppPreferences;
   settings: AISettings;
 }) {
+  const router = useRouter();
   const initialProvider = settings.provider ?? "openai";
   const [provider, setProvider] = useState<AIProvider>(initialProvider);
   const [modelId, setModelId] = useState(settings.model_id ?? providerDetails[initialProvider].modelPlaceholder);
@@ -61,16 +63,45 @@ export function SettingsClient({
   const [isSaving, setIsSaving] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
 
+  function buildAiSettingsUpdatePayload() {
+    return {
+      provider,
+      model_id: modelId.trim() || null,
+      ...(clearApiKey ? { clear_api_key: true as const } : {}),
+      ...(!clearApiKey && apiKey.trim() ? { api_key: apiKey.trim() } : {}),
+    };
+  }
+
+  function buildAiSettingsTestPayload() {
+    return {
+      provider,
+      model_id: modelId.trim() || null,
+      api_key: apiKey.trim() || null,
+    };
+  }
+
+  function handleProviderChange(nextProvider: AIProvider) {
+    setProvider(nextProvider);
+    setModelId(providerDetails[nextProvider].modelPlaceholder);
+  }
+
+  async function persistSettings() {
+    await Promise.all([
+      updateAiSettings(buildAiSettingsUpdatePayload()),
+      updateAppPreferences({ ui_language: uiLanguage }),
+    ]);
+    setApiKey("");
+    setClearApiKey(false);
+    setFeedback(copy.actionSaved);
+    router.refresh();
+  }
+
   async function handleTest() {
     setError(null);
     setFeedback(null);
     setIsTesting(true);
     try {
-      const result = await testAiSettings({
-        provider,
-        model_id: modelId,
-        api_key: apiKey || null,
-      });
+      const result = await testAiSettings(buildAiSettingsTestPayload());
       setFeedback(result.data.message);
     } catch (submissionError) {
       setError(getApiErrorMessage(submissionError));
@@ -86,19 +117,7 @@ export function SettingsClient({
     setIsSaving(true);
 
     try {
-      await Promise.all([
-        updateAiSettings({
-          provider,
-          model_id: modelId.trim() || null,
-          ...(clearApiKey ? { clear_api_key: true } : {}),
-          ...(!clearApiKey && apiKey.trim() ? { api_key: apiKey.trim() } : {}),
-        }),
-        updateAppPreferences({ ui_language: uiLanguage }),
-      ]);
-      setApiKey("");
-      setClearApiKey(false);
-      setFeedback(copy.actionSaved);
-      window.location.reload();
+      await persistSettings();
     } catch (submissionError) {
       setError(getApiErrorMessage(submissionError));
     } finally {
@@ -111,24 +130,11 @@ export function SettingsClient({
     setFeedback(null);
     setIsTesting(true);
     try {
-      const result = await testAiSettings({
-        provider,
-        model_id: modelId,
-        api_key: apiKey || null,
-      });
+      const result = await testAiSettings(buildAiSettingsTestPayload());
       setFeedback(result.data.message);
       setIsTesting(false);
       setIsSaving(true);
-      await Promise.all([
-        updateAiSettings({
-          provider,
-          model_id: modelId.trim() || null,
-          ...(clearApiKey ? { clear_api_key: true } : {}),
-          ...(!clearApiKey && apiKey.trim() ? { api_key: apiKey.trim() } : {}),
-        }),
-        updateAppPreferences({ ui_language: uiLanguage }),
-      ]);
-      window.location.reload();
+      await persistSettings();
     } catch (submissionError) {
       setError(getApiErrorMessage(submissionError));
     } finally {
@@ -144,7 +150,7 @@ export function SettingsClient({
           <div className="settings-sidebar-title">{copy.settings}</div>
           <div className="settings-nav-item">
             <Icon name="user" width={16} height={16} />
-            <span>Account</span>
+            <span>{copy.accountLabel}</span>
           </div>
           <div className="settings-nav-item active">
             <Icon name="cpu" width={16} height={16} />
@@ -167,7 +173,7 @@ export function SettingsClient({
           <form className="settings-form" onSubmit={handleSave}>
             <label className="field">
               <span>{copy.aiProvider}</span>
-              <select onChange={(event) => setProvider(event.target.value as AIProvider)} value={provider}>
+              <select onChange={(event) => handleProviderChange(event.target.value as AIProvider)} value={provider}>
                 {Object.entries(providerDetails).map(([providerId, details]) => (
                   <option key={providerId} value={providerId}>
                     {details.label}
@@ -190,15 +196,15 @@ export function SettingsClient({
               <span>{copy.apiKey}</span>
               <input
                 onChange={(event) => setApiKey(event.target.value)}
-                placeholder={settings.has_api_key ? "Leave blank to keep current key" : "sk-..."}
+                placeholder={settings.has_api_key ? copy.keepCurrentKeyPlaceholder : "sk-..."}
                 type="password"
                 value={apiKey}
               />
             </label>
 
             <p className="field-help">
-              {copy.currentKey}: {settings.api_key_mask ?? "None"}
-              {settings.updated_at ? ` · ${formatUtcTimestamp(settings.updated_at)}` : ""}
+              {copy.currentKey}: {settings.api_key_mask ?? copy.noneLabel}
+              {settings.updated_at ? ` · ${formatUtcTimestamp(settings.updated_at, uiLanguage)}` : ""}
             </p>
 
             <label className="checkbox-row">
@@ -231,10 +237,10 @@ export function SettingsClient({
 
             <div className="settings-actions">
               <button className="secondary-button" disabled={isTesting || isSaving} onClick={() => void handleTest()} type="button">
-                {isTesting ? "Testing..." : copy.testConnection}
+                {isTesting ? copy.testing : copy.testConnection}
               </button>
               <button className="primary-button" disabled={isSaving || isTesting} type="submit">
-                {isSaving ? "Saving..." : copy.saveSettings}
+                {isSaving ? copy.saving : copy.saveSettings}
               </button>
             </div>
           </form>
@@ -254,7 +260,7 @@ export function SettingsClient({
           <div className="mobile-list-group">
             <label className="mobile-list-item">
               <span>{copy.aiProvider}</span>
-              <select onChange={(event) => setProvider(event.target.value as AIProvider)} value={provider}>
+              <select onChange={(event) => handleProviderChange(event.target.value as AIProvider)} value={provider}>
                 {Object.entries(providerDetails).map(([providerId, details]) => (
                   <option key={providerId} value={providerId}>
                     {details.label}
@@ -272,7 +278,12 @@ export function SettingsClient({
         <div className="settings-mobile-section">
           <h2>{copy.apiKey}</h2>
           <div className="mobile-list-group single-input">
-            <input onChange={(event) => setApiKey(event.target.value)} placeholder="sk-..." type="password" value={apiKey} />
+            <input
+              onChange={(event) => setApiKey(event.target.value)}
+              placeholder={settings.has_api_key ? copy.keepCurrentKeyPlaceholder : "sk-..."}
+              type="password"
+              value={apiKey}
+            />
           </div>
           <p className="mobile-helper-text">{copy.storedLocally}</p>
         </div>
@@ -292,7 +303,7 @@ export function SettingsClient({
 
         <div className="settings-mobile-actions">
           <button className="secondary-button full-width" disabled={isTesting || isSaving} onClick={() => void handleTest()} type="button">
-            {isTesting ? "Testing..." : copy.testConnection}
+            {isTesting ? copy.testing : copy.testConnection}
           </button>
           <button
             className="primary-button full-width"
@@ -300,7 +311,7 @@ export function SettingsClient({
             onClick={() => void handleTestAndSave()}
             type="button"
           >
-            {isSaving ? "Saving..." : copy.saveAndTest}
+            {isSaving ? copy.saving : copy.saveAndTest}
           </button>
         </div>
 

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Icon } from "@/components/icons";
 import { getAppPreferences, getBoards, getInspirations } from "@/lib/api";
+import { formatUtcTimestamp } from "@/lib/format";
 import { getDictionary } from "@/lib/i18n";
 
 export default async function InsightsPage() {
@@ -20,6 +21,10 @@ export default async function InsightsPage() {
   const archivedItems = archivedResult.status === "fulfilled" ? archivedResult.value.data : [];
   const allItems = [...activeItems, ...archivedItems];
   const analyzedCount = allItems.filter((item) => item.analysis_status === "completed").length;
+  const recentAnalysisItems = [...allItems]
+    .filter((item) => item.analysis_status === "completed" && item.analyzed_at)
+    .sort((left, right) => Date.parse(right.analyzed_at ?? "") - Date.parse(left.analyzed_at ?? ""))
+    .slice(0, 6);
   const tagMap = new Map<string, number>();
 
   for (const item of allItems) {
@@ -36,7 +41,7 @@ export default async function InsightsPage() {
       <div className="workspace-body">
         <aside className="workspace-sidebar">
           <div>
-            <p className="sidebar-label">Library</p>
+            <p className="sidebar-label">{copy.libraryLabel}</p>
             <Link className="sidebar-link" href="/inspirations">
               <Icon name="layout" width={16} height={16} />
               <span>{copy.allInspirations}</span>
@@ -46,7 +51,7 @@ export default async function InsightsPage() {
               <span>{copy.insights}</span>
             </Link>
 
-            <p className="sidebar-label boards">Boards</p>
+            <p className="sidebar-label boards">{copy.boardsLabel}</p>
             {boards.map((board) => (
               <Link className="sidebar-link" href={`/inspirations?board=${board.id}`} key={board.id}>
                 <span className="sidebar-board-mark" />
@@ -108,10 +113,10 @@ export default async function InsightsPage() {
               <article className="insight-card">
                 <h2>{copy.recentAnalysis}</h2>
                 <div className="insight-list">
-                  {allItems.slice(0, 6).map((item) => (
+                  {recentAnalysisItems.map((item) => (
                     <div className="insight-row" key={item.id}>
                       <span>{item.title || item.original_filename}</span>
-                      <strong>{item.analysis_status}</strong>
+                      <strong>{item.analyzed_at ? formatUtcTimestamp(item.analyzed_at, preferences.ui_language) : copy.analyzeReady}</strong>
                     </div>
                   ))}
                 </div>

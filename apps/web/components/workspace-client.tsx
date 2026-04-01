@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   analyzeInspiration,
   archiveInspiration,
@@ -17,7 +17,7 @@ import {
   updateInspiration,
 } from "@/lib/api";
 import { type CopyDictionary, getAnalysisLanguage } from "@/lib/i18n";
-import { formatUtcTimestamp, getSafeHttpUrl } from "@/lib/format";
+import { formatCalendarDate, formatUtcTimestamp, getSafeHttpUrl } from "@/lib/format";
 import { Icon } from "@/components/icons";
 
 function resolveFileUrl(fileUrl: string) {
@@ -53,6 +53,7 @@ export function WorkspaceClient({
   const searchParams = useSearchParams();
   const [toast, setToast] = useState<string | null>(null);
   const [analysisLanguage, setAnalysisLanguage] = useState<"en" | "zh">(getAnalysisLanguage(language));
+  const [boardSelection, setBoardSelection] = useState(selectedItem?.board_id ?? "");
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [selectedFileName, setSelectedFileName] = useState("");
   const [isUploading, setIsUploading] = useState(false);
@@ -69,6 +70,15 @@ export function WorkspaceClient({
     analysisLanguage === "en" ? selectedItem?.analysis_tags_en ?? [] : selectedItem?.analysis_tags_zh ?? [];
 
   const shareableTags = useMemo(() => tagsValue.join(", "), [tagsValue]);
+  const mobileDate = useMemo(() => formatCalendarDate(new Date(), language), [language]);
+
+  useEffect(() => {
+    setAnalysisLanguage(getAnalysisLanguage(language));
+  }, [language]);
+
+  useEffect(() => {
+    setBoardSelection(selectedItem?.board_id ?? "");
+  }, [selectedItem?.board_id, selectedItem?.id]);
 
   function buildHref(overrides: Record<string, string | null | undefined>) {
     const params = new URLSearchParams(searchParams.toString());
@@ -93,7 +103,7 @@ export function WorkspaceClient({
       setToast(copy.actionCopied);
       window.setTimeout(() => setToast(null), 1800);
     } catch {
-      setToast("Clipboard unavailable");
+      setToast(copy.clipboardUnavailable);
       window.setTimeout(() => setToast(null), 1800);
     }
   }
@@ -134,13 +144,16 @@ export function WorkspaceClient({
       return;
     }
 
+    const normalizedBoardId = nextBoardId || null;
+    setBoardSelection(nextBoardId);
     setIsUpdatingBoard(true);
     try {
-      await updateInspiration(selectedItem.id, { board_id: nextBoardId });
+      await updateInspiration(selectedItem.id, { board_id: normalizedBoardId });
       router.refresh();
       setToast(copy.actionSaved);
       window.setTimeout(() => setToast(null), 1800);
     } catch (error) {
+      setBoardSelection(selectedItem.board_id ?? "");
       setToast(getApiErrorMessage(error));
       window.setTimeout(() => setToast(null), 2400);
     } finally {
@@ -192,7 +205,7 @@ export function WorkspaceClient({
       return;
     }
 
-    const confirmed = window.confirm("Delete this archived inspiration permanently?");
+    const confirmed = window.confirm(copy.deleteArchivedConfirm);
     if (!confirmed) {
       return;
     }
@@ -215,7 +228,7 @@ export function WorkspaceClient({
       <div className={`workspace-body ${selectedItem ? "has-inspector" : "without-inspector"}`}>
         <aside className="workspace-sidebar">
           <div>
-            <p className="sidebar-label">Library</p>
+            <p className="sidebar-label">{copy.libraryLabel}</p>
             <Link className="sidebar-link active" href="/inspirations">
               <Icon name="layout" width={16} height={16} />
               <span>{copy.allInspirations}</span>
@@ -225,7 +238,7 @@ export function WorkspaceClient({
               <span>{copy.insights}</span>
             </Link>
 
-            <p className="sidebar-label boards">Boards</p>
+            <p className="sidebar-label boards">{copy.boardsLabel}</p>
             {boards.map((board) => (
               <Link
                 className={`sidebar-link ${selectedBoard?.id === board.id ? "selected-board" : ""}`}
@@ -247,7 +260,7 @@ export function WorkspaceClient({
         <main className="workspace-main">
           <header className="workspace-toolbar">
             <div className="mobile-hero">
-              <p className="mobile-date">March 31</p>
+              <p className="mobile-date">{mobileDate}</p>
               <div className="mobile-hero-row">
                 <h1>{copy.todayInspirations}</h1>
                 <button className="icon-button soft" type="button">
@@ -317,6 +330,7 @@ export function WorkspaceClient({
             isArchiving={isArchiving}
             isDeleting={isDeleting}
             isUpdatingBoard={isUpdatingBoard}
+            language={language}
             onAnalyze={handleAnalyze}
             onArchive={handleArchive}
             onBoardChange={handleBoardChange}
@@ -325,6 +339,7 @@ export function WorkspaceClient({
             onDelete={handleDelete}
             onLanguageChange={setAnalysisLanguage}
             promptValue={promptValue}
+            selectedBoardValue={boardSelection}
             selectedItem={selectedItem}
             shareableTags={shareableTags}
             tagsValue={tagsValue}
@@ -347,12 +362,12 @@ export function WorkspaceClient({
             </div>
             <form className="compose-form" onSubmit={handleUpload}>
               <label className="field">
-                <span>Image file</span>
+                <span>{copy.imageFileLabel}</span>
                 <div className="file-picker-row">
                   <label className="file-picker-button" htmlFor="compose-file-input">
-                    选取文件
+                    {copy.chooseFile}
                   </label>
-                  <span className="file-picker-name">{selectedFileName || "未选择文件"}</span>
+                  <span className="file-picker-name">{selectedFileName || copy.noFileSelected}</span>
                 </div>
                 <input
                   accept="image/png,image/jpeg,image/webp"
@@ -366,7 +381,7 @@ export function WorkspaceClient({
               </label>
               <label className="field">
                 <span>{copy.titleField}</span>
-                <input name="title" placeholder="Landing page reference" type="text" />
+                <input name="title" placeholder={copy.titlePlaceholder} type="text" />
               </label>
               <label className="field">
                 <span>{copy.urlField}</span>
@@ -374,7 +389,7 @@ export function WorkspaceClient({
               </label>
               <label className="field">
                 <span>{copy.notesField}</span>
-                <textarea name="notes" placeholder="Optional notes" rows={4} />
+                <textarea name="notes" placeholder={copy.notesPlaceholder} rows={4} />
               </label>
               {uploadError ? <p className="form-error">{uploadError}</p> : null}
               <div className="compose-actions">
@@ -382,7 +397,7 @@ export function WorkspaceClient({
                   {copy.cancel}
                 </Link>
                 <button className="primary-button" disabled={isUploading} type="submit">
-                  {isUploading ? "Saving..." : copy.save}
+                  {isUploading ? copy.saving : copy.save}
                 </button>
               </div>
             </form>
@@ -403,6 +418,7 @@ export function WorkspaceClient({
               isArchiving={isArchiving}
               isDeleting={isDeleting}
               isUpdatingBoard={isUpdatingBoard}
+              language={language}
               onAnalyze={handleAnalyze}
               onArchive={handleArchive}
               onBoardChange={handleBoardChange}
@@ -411,6 +427,7 @@ export function WorkspaceClient({
               onDelete={handleDelete}
               onLanguageChange={setAnalysisLanguage}
               promptValue={promptValue}
+              selectedBoardValue={boardSelection}
               selectedItem={selectedItem}
               shareableTags={shareableTags}
               tagsValue={tagsValue}
@@ -468,7 +485,7 @@ function WorkspaceImageCard({
             </p>
           </div>
         ) : item.analysis_status === "failed" ? (
-          <p className="masonry-error">{item.analysis_error ?? "Analysis failed"}</p>
+          <p className="masonry-error">{item.analysis_error ?? copy.analysisFailed}</p>
         ) : cardTags.length > 0 ? (
           <div className="masonry-tags">
             {cardTags.slice(0, 3).map((tag) => (
@@ -491,6 +508,7 @@ function InspectorPanel({
   isArchiving,
   isDeleting,
   isUpdatingBoard,
+  language,
   onAnalyze,
   onArchive,
   onBoardChange,
@@ -499,6 +517,7 @@ function InspectorPanel({
   onDelete,
   onLanguageChange,
   promptValue,
+  selectedBoardValue,
   selectedItem,
   shareableTags,
   tagsValue,
@@ -510,6 +529,7 @@ function InspectorPanel({
   isArchiving: boolean;
   isDeleting: boolean;
   isUpdatingBoard: boolean;
+  language: UILanguage;
   onAnalyze: () => Promise<void>;
   onArchive: () => Promise<void>;
   onBoardChange: (boardId: string) => Promise<void>;
@@ -518,6 +538,7 @@ function InspectorPanel({
   onDelete: () => Promise<void>;
   onLanguageChange: (language: "en" | "zh") => void;
   promptValue: string;
+  selectedBoardValue: string;
   selectedItem: InspirationDetail | null;
   shareableTags: string;
   tagsValue: string[];
@@ -556,11 +577,8 @@ function InspectorPanel({
       <div className="inspector-scroll">
         <label className="inspector-select">
           <span>{copy.saveToBoard}</span>
-          <select
-            defaultValue={selectedItem.board_id ?? boards[0]?.id}
-            disabled={isUpdatingBoard}
-            onChange={(event) => void onBoardChange(event.target.value)}
-          >
+          <select disabled={isUpdatingBoard} onChange={(event) => void onBoardChange(event.target.value)} value={selectedBoardValue}>
+            <option value="">{copy.noBoard}</option>
             {boards.map((board) => (
               <option key={board.id} value={board.id}>
                 {board.name}
@@ -632,7 +650,8 @@ function InspectorPanel({
 
         <div className="inspector-footer">
           <span>
-            <Icon name="clock" width={12} height={12} /> {selectedItem.analyzed_at ? `${copy.parsedAt} ${formatUtcTimestamp(selectedItem.analyzed_at)}` : copy.analyzeReady}
+            <Icon name="clock" width={12} height={12} />{" "}
+            {selectedItem.analyzed_at ? `${copy.parsedAt} ${formatUtcTimestamp(selectedItem.analyzed_at, language)}` : copy.analyzeReady}
           </span>
           <div className="footer-actions">
             <button className="ghost-button" disabled={isAnalyzing} onClick={() => void onAnalyze()} type="button">

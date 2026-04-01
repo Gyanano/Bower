@@ -18,6 +18,7 @@ export interface InspirationListItem {
   file_size_bytes: number;
   created_at: string;
   updated_at: string;
+  analyzed_at: string | null;
   file_url: string;
   analysis_status: "idle" | "processing" | "completed" | "failed";
   analysis_error: string | null;
@@ -34,7 +35,6 @@ export interface InspirationDetail extends InspirationListItem {
   analysis_prompt_zh: string | null;
   analysis_colors: string[];
   storage_key: string;
-  analyzed_at: string | null;
   archived_at: string | null;
 }
 

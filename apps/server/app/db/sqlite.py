@@ -1,4 +1,5 @@
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parents[4]
@@ -12,16 +13,20 @@ DEFAULT_BOARDS = (
 DEFAULT_UI_LANGUAGE = "zh-CN"
 
 
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
 def get_connection() -> sqlite3.Connection:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(DATABASE_PATH)
+    connection.execute("PRAGMA foreign_keys = ON")
     connection.row_factory = sqlite3.Row
     return connection
 
 
 def initialize_database() -> None:
     with get_connection() as connection:
-        connection.execute("PRAGMA foreign_keys = ON")
         connection.execute(
             """
             CREATE TABLE IF NOT EXISTS boards (
@@ -84,7 +89,8 @@ def initialize_database() -> None:
         )
 
         columns = {row["name"] for row in connection.execute("PRAGMA table_info(inspirations)").fetchall()}
-        if "board_id" not in columns:
+        board_id_added = "board_id" not in columns
+        if board_id_added:
             connection.execute("ALTER TABLE inspirations ADD COLUMN board_id TEXT NULL")
         if "status" not in columns:
             connection.execute("ALTER TABLE inspirations ADD COLUMN status TEXT NOT NULL DEFAULT 'active'")
@@ -114,33 +120,89 @@ def initialize_database() -> None:
         if "archived_at" not in columns:
             connection.execute("ALTER TABLE inspirations ADD COLUMN archived_at TEXT NULL")
 
+        seeded_at = _utc_now()
         for board_id, board_name, board_slug in DEFAULT_BOARDS:
             connection.execute(
                 """
                 INSERT INTO boards (id, name, slug, created_at)
-                VALUES (?, ?, ?, datetime('now'))
+                VALUES (?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     name = excluded.name,
                     slug = excluded.slug
                 """,
-                (board_id, board_name, board_slug),
+                (board_id, board_name, board_slug, seeded_at),
             )
 
         connection.execute(
             """
             INSERT INTO app_preferences (id, ui_language, updated_at)
-            VALUES (1, ?, datetime('now'))
+            VALUES (1, ?, ?)
             ON CONFLICT(id) DO NOTHING
             """,
-            (DEFAULT_UI_LANGUAGE,),
+            (DEFAULT_UI_LANGUAGE, seeded_at),
         )
 
         default_board_id = DEFAULT_BOARDS[0][0]
-        connection.execute(
-            "UPDATE inspirations SET board_id = ? WHERE board_id IS NULL OR board_id = ''",
-            (default_board_id,),
-        )
+        if board_id_added:
+            connection.execute(
+                "UPDATE inspirations SET board_id = ? WHERE board_id IS NULL OR board_id = ''",
+                (default_board_id,),
+            )
+
         connection.execute("UPDATE inspirations SET status = 'active' WHERE status IS NULL OR status = ''")
         connection.execute("UPDATE inspirations SET updated_at = created_at WHERE updated_at = ''")
-        connection.execute("UPDATE inspirations SET analysis_status = 'idle' WHERE analysis_status IS NULL OR analysis_status = ''")
+        connection.execute(
+            """
+            UPDATE inspirations
+            SET analysis_tags_en_json = analysis_tags_json
+            WHERE
+                (analysis_tags_en_json IS NULL OR analysis_tags_en_json = '')
+                AND analysis_tags_json IS NOT NULL
+                AND analysis_tags_json != ''
+            """
+        )
+        connection.execute(
+            """
+            UPDATE inspirations
+            SET analysis_tags_zh_json = analysis_tags_json
+            WHERE
+                (analysis_tags_zh_json IS NULL OR analysis_tags_zh_json = '')
+                AND analysis_tags_json IS NOT NULL
+                AND analysis_tags_json != ''
+            """
+        )
+        connection.execute(
+            """
+            UPDATE inspirations
+            SET analysis_status = 'failed'
+            WHERE
+                coalesce(analysis_error, '') != ''
+                AND (analysis_status IS NULL OR analysis_status = '' OR analysis_status = 'idle')
+            """
+        )
+        connection.execute(
+            """
+            UPDATE inspirations
+            SET analysis_status = 'completed'
+            WHERE
+                (
+                    coalesce(analysis_summary, '') != ''
+                    OR coalesce(analysis_tags_json, '') != ''
+                    OR coalesce(analysis_tags_en_json, '') != ''
+                    OR coalesce(analysis_tags_zh_json, '') != ''
+                    OR coalesce(analysis_prompt_en, '') != ''
+                    OR coalesce(analysis_prompt_zh, '') != ''
+                    OR coalesce(analysis_colors_json, '') != ''
+                    OR coalesce(analyzed_at, '') != ''
+                )
+                AND (analysis_status IS NULL OR analysis_status = '' OR analysis_status = 'idle')
+            """
+        )
+        connection.execute(
+            """
+            UPDATE inspirations
+            SET analysis_status = 'idle'
+            WHERE analysis_status IS NULL OR analysis_status = ''
+            """
+        )
         connection.commit()

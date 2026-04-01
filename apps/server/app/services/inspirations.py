@@ -140,8 +140,24 @@ def _row_to_record(row) -> InspirationRecord:
     )
 
 
+def _analysis_tags_payload(
+    *,
+    analysis_tags_json: str | None,
+    analysis_tags_en_json: str | None,
+    analysis_tags_zh_json: str | None,
+) -> tuple[list[str], list[str]]:
+    legacy_tags = _parse_json_list(analysis_tags_json)
+    analysis_tags_en = _parse_json_list(analysis_tags_en_json) or legacy_tags
+    analysis_tags_zh = _parse_json_list(analysis_tags_zh_json) or legacy_tags
+    return analysis_tags_en, analysis_tags_zh
+
+
 def _detail_payload(record: InspirationRecord) -> dict[str, object]:
-    analysis_tags_en = _parse_json_list(record.analysis_tags_en_json)
+    analysis_tags_en, analysis_tags_zh = _analysis_tags_payload(
+        analysis_tags_json=record.analysis_tags_json,
+        analysis_tags_en_json=record.analysis_tags_en_json,
+        analysis_tags_zh_json=record.analysis_tags_zh_json,
+    )
     return {
         "id": record.id,
         "board_id": record.board_id,
@@ -154,7 +170,7 @@ def _detail_payload(record: InspirationRecord) -> dict[str, object]:
         "analysis_prompt_en": record.analysis_prompt_en,
         "analysis_prompt_zh": record.analysis_prompt_zh,
         "analysis_tags_en": analysis_tags_en,
-        "analysis_tags_zh": _parse_json_list(record.analysis_tags_zh_json),
+        "analysis_tags_zh": analysis_tags_zh,
         "analysis_colors": _parse_json_list(record.analysis_colors_json),
         "analysis_status": record.analysis_status,
         "analysis_error": record.analysis_error,
@@ -332,12 +348,13 @@ def list_inspirations(limit: int, offset: int, status: str, q: str | None = None
                 OR lower(coalesce(inspirations.source_url, '')) LIKE ?
                 OR lower(coalesce(inspirations.analysis_prompt_en, '')) LIKE ?
                 OR lower(coalesce(inspirations.analysis_prompt_zh, '')) LIKE ?
+                OR lower(coalesce(inspirations.analysis_tags_json, '')) LIKE ?
                 OR lower(coalesce(inspirations.analysis_tags_en_json, '')) LIKE ?
                 OR lower(coalesce(inspirations.analysis_tags_zh_json, '')) LIKE ?
             )
             """
         )
-        values.extend([like_search] * 8)
+        values.extend([like_search] * 9)
 
     where_clause = " AND ".join(filters)
 
@@ -355,8 +372,10 @@ def list_inspirations(limit: int, offset: int, status: str, q: str | None = None
                 inspirations.file_size_bytes,
                 inspirations.created_at,
                 inspirations.updated_at,
+                inspirations.analyzed_at,
                 inspirations.analysis_status,
                 inspirations.analysis_error,
+                inspirations.analysis_tags_json,
                 inspirations.analysis_tags_en_json,
                 inspirations.analysis_tags_zh_json
             FROM inspirations
@@ -381,8 +400,13 @@ def list_inspirations(limit: int, offset: int, status: str, q: str | None = None
     for row in rows:
         payload = dict(row)
         payload["file_url"] = f'/api/v1/inspirations/{payload["id"]}/file'
-        payload["analysis_tags_en"] = _parse_json_list(payload.pop("analysis_tags_en_json"))
-        payload["analysis_tags_zh"] = _parse_json_list(payload.pop("analysis_tags_zh_json"))
+        analysis_tags_en, analysis_tags_zh = _analysis_tags_payload(
+            analysis_tags_json=payload.pop("analysis_tags_json"),
+            analysis_tags_en_json=payload.pop("analysis_tags_en_json"),
+            analysis_tags_zh_json=payload.pop("analysis_tags_zh_json"),
+        )
+        payload["analysis_tags_en"] = analysis_tags_en
+        payload["analysis_tags_zh"] = analysis_tags_zh
         data.append(InspirationListItem.model_validate(payload))
 
     return InspirationListEnvelope(data=data, meta=PaginationMeta(limit=safe_limit, offset=safe_offset, total=total))
@@ -412,7 +436,8 @@ def update_inspiration_metadata(inspiration_id: str, patch: InspirationMetadataP
         if field_name == "source_url":
             updates[field_name] = _normalize_source_url(getattr(patch, field_name))
         elif field_name == "board_id":
-            updates[field_name] = _validate_board_id(getattr(patch, field_name))
+            value = getattr(patch, field_name)
+            updates[field_name] = None if value is None else _validate_board_id(value)
         else:
             updates[field_name] = _normalize_optional_text(getattr(patch, field_name))
 
@@ -497,7 +522,7 @@ def analyze_inspiration(inspiration_id: str) -> InspirationDetailEnvelope:
                 WHERE id = ?
                 """,
                 (message, _utc_now(), inspiration_id),
-                )
+            )
             connection.commit()
         raise _error(500, "SAVE_FAILED", message) from exc
 
