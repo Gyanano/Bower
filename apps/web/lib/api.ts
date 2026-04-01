@@ -80,6 +80,12 @@ export interface AppPreferences {
   updated_at: string | null;
 }
 
+export interface AllInspirationsResult {
+  items: InspirationListItem[];
+  incomplete: boolean;
+  errorMessage: string | null;
+}
+
 interface ApiErrorEnvelope {
   error: {
     code: string;
@@ -158,19 +164,67 @@ export async function getInspirations(params?: {
   );
 }
 
-export async function getAllInspirations(status: "active" | "archived", pageSize = 100) {
-  const items: InspirationListItem[] = [];
-  let offset = 0;
-  let total = 0;
+export async function getAllInspirations(status: "active" | "archived", pageSize = 100): Promise<AllInspirationsResult> {
+  try {
+    const firstPage = await getInspirations({ limit: pageSize, offset: 0, status });
+    const items = [...firstPage.data];
+    const seenIds = new Set(items.map((item) => item.id));
+    const total = firstPage.meta.total;
 
-  do {
-    const result = await getInspirations({ limit: pageSize, offset, status });
-    items.push(...result.data);
-    total = result.meta.total;
-    offset += result.data.length;
-  } while (offset < total);
+    if (total <= items.length) {
+      return {
+        items,
+        incomplete: false,
+        errorMessage: null,
+      };
+    }
 
-  return items;
+    const offsets: number[] = [];
+    for (let offset = pageSize; offset < total; offset += pageSize) {
+      offsets.push(offset);
+    }
+
+    const remainingPages = await Promise.allSettled(
+      offsets.map((offset) => getInspirations({ limit: pageSize, offset, status })),
+    );
+
+    let incomplete = items.length === 0 && total > 0;
+    let errorMessage: string | null = null;
+
+    for (const page of remainingPages) {
+      if (page.status === "rejected") {
+        incomplete = true;
+        errorMessage ??= getApiErrorMessage(page.reason);
+        continue;
+      }
+
+      if (page.value.data.length === 0) {
+        incomplete = true;
+        continue;
+      }
+
+      for (const item of page.value.data) {
+        if (seenIds.has(item.id)) {
+          continue;
+        }
+
+        seenIds.add(item.id);
+        items.push(item);
+      }
+    }
+
+    return {
+      items,
+      incomplete: incomplete || items.length < total,
+      errorMessage,
+    };
+  } catch (error) {
+    return {
+      items: [],
+      incomplete: true,
+      errorMessage: getApiErrorMessage(error),
+    };
+  }
 }
 
 export async function getInspiration(id: string) {

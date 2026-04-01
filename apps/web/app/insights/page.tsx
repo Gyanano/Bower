@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Icon } from "@/components/icons";
-import { getAllInspirations, getAppPreferences, getBoards } from "@/lib/api";
+import { getAllInspirations, getApiErrorMessage, getAppPreferences, getBoards } from "@/lib/api";
 import { formatUtcTimestamp } from "@/lib/format";
 import { getDictionary } from "@/lib/i18n";
 
@@ -17,9 +17,17 @@ export default async function InsightsPage() {
     : { ui_language: "zh-CN" as const, updated_at: null };
   const copy = getDictionary(preferences.ui_language);
   const boards = boardsResult.status === "fulfilled" ? boardsResult.value.data : [];
-  const activeItems = activeResult.status === "fulfilled" ? activeResult.value : [];
-  const archivedItems = archivedResult.status === "fulfilled" ? archivedResult.value : [];
+  const activeData = activeResult.status === "fulfilled"
+    ? activeResult.value
+    : { items: [], incomplete: true, errorMessage: getApiErrorMessage(activeResult.reason) };
+  const archivedData = archivedResult.status === "fulfilled"
+    ? archivedResult.value
+    : { items: [], incomplete: true, errorMessage: getApiErrorMessage(archivedResult.reason) };
+  const activeItems = activeData.items;
+  const archivedItems = archivedData.items;
   const allItems = [...activeItems, ...archivedItems];
+  const insightsWarnings = [...new Set([activeData.errorMessage, archivedData.errorMessage].filter(Boolean))];
+  const hasIncompleteInsights = activeData.incomplete || archivedData.incomplete;
   const analyzedCount = allItems.filter((item) => item.analysis_status === "completed").length;
   const recentAnalysisItems = [...allItems]
     .filter((item) => item.analysis_status === "completed" && item.analyzed_at)
@@ -74,6 +82,13 @@ export default async function InsightsPage() {
                 <p>{copy.insightsDescription}</p>
               </div>
             </header>
+
+            {hasIncompleteInsights ? (
+              <p className="form-error insights-warning">
+                {copy.insightsIncompleteWarning}
+                {insightsWarnings.length ? ` (${insightsWarnings.join(" · ")})` : ""}
+              </p>
+            ) : null}
 
             <section className="insights-metrics">
               <article className="insight-card">
