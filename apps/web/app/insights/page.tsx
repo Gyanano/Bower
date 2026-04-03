@@ -1,8 +1,14 @@
 import Link from "next/link";
 import { Icon } from "@/components/icons";
-import { getAllInspirations, getApiErrorMessage, getAppPreferences, getBoards } from "@/lib/api";
+import { getAllInspirations, getAppPreferences, getBoards, type InsightsWarningReason } from "@/lib/api";
 import { formatUtcTimestamp } from "@/lib/format";
 import { getDictionary } from "@/lib/i18n";
+
+const failedInsightsResult = {
+  items: [],
+  incomplete: true,
+  warningReasons: ["request_failed"] as InsightsWarningReason[],
+};
 
 export default async function InsightsPage() {
   const [preferencesResult, boardsResult, activeResult, archivedResult] = await Promise.allSettled([
@@ -19,14 +25,22 @@ export default async function InsightsPage() {
   const boards = boardsResult.status === "fulfilled" ? boardsResult.value.data : [];
   const activeData = activeResult.status === "fulfilled"
     ? activeResult.value
-    : { items: [], incomplete: true, errorMessage: getApiErrorMessage(activeResult.reason) };
+    : failedInsightsResult;
   const archivedData = archivedResult.status === "fulfilled"
     ? archivedResult.value
-    : { items: [], incomplete: true, errorMessage: getApiErrorMessage(archivedResult.reason) };
+    : failedInsightsResult;
   const activeItems = activeData.items;
   const archivedItems = archivedData.items;
   const allItems = [...activeItems, ...archivedItems];
-  const insightsWarnings = [...new Set([activeData.errorMessage, archivedData.errorMessage].filter(Boolean))];
+  const insightsWarningMessages = [...new Set([...activeData.warningReasons, ...archivedData.warningReasons])].map((reason) => {
+    switch (reason) {
+      case "request_limit_reached":
+        return copy.insightsLimitReachedWarning;
+      case "request_failed":
+      default:
+        return copy.insightsLoadIssueWarning;
+    }
+  });
   const hasIncompleteInsights = activeData.incomplete || archivedData.incomplete;
   const analyzedCount = allItems.filter((item) => item.analysis_status === "completed").length;
   const recentAnalysisItems = [...allItems]
@@ -84,9 +98,9 @@ export default async function InsightsPage() {
             </header>
 
             {hasIncompleteInsights ? (
-              <p className="form-error insights-warning">
+              <p className="insights-warning" role="status">
                 {copy.insightsIncompleteWarning}
-                {insightsWarnings.length ? ` (${insightsWarnings.join(" · ")})` : ""}
+                {insightsWarningMessages.length ? ` (${insightsWarningMessages.join(" · ")})` : ""}
               </p>
             ) : null}
 

@@ -80,11 +80,16 @@ export interface AppPreferences {
   updated_at: string | null;
 }
 
+export type InsightsWarningReason = "request_failed" | "request_limit_reached";
+
 export interface AllInspirationsResult {
   items: InspirationListItem[];
   incomplete: boolean;
-  errorMessage: string | null;
+  warningReasons: InsightsWarningReason[];
 }
+
+const ALL_INSPIRATIONS_MAX_PAGES = 10;
+const ALL_INSPIRATIONS_MAX_CONCURRENCY = 4;
 
 interface ApiErrorEnvelope {
   error: {
@@ -170,59 +175,70 @@ export async function getAllInspirations(status: "active" | "archived", pageSize
     const items = [...firstPage.data];
     const seenIds = new Set(items.map((item) => item.id));
     const total = firstPage.meta.total;
+    const warningReasons = new Set<InsightsWarningReason>();
 
     if (total <= items.length) {
       return {
         items,
         incomplete: false,
-        errorMessage: null,
+        warningReasons: [],
       };
     }
 
+    const remainingPageBudget = Math.max(ALL_INSPIRATIONS_MAX_PAGES - 1, 0);
     const offsets: number[] = [];
-    for (let offset = pageSize; offset < total; offset += pageSize) {
+    for (let offset = pageSize; offset < total && offsets.length < remainingPageBudget; offset += pageSize) {
       offsets.push(offset);
     }
 
-    const remainingPages = await Promise.allSettled(
-      offsets.map((offset) => getInspirations({ limit: pageSize, offset, status })),
-    );
+    const hitRequestLimit = pageSize * ALL_INSPIRATIONS_MAX_PAGES < total;
 
-    let incomplete = items.length === 0 && total > 0;
-    let errorMessage: string | null = null;
+    if (hitRequestLimit) {
+      warningReasons.add("request_limit_reached");
+    }
 
-    for (const page of remainingPages) {
-      if (page.status === "rejected") {
-        incomplete = true;
-        errorMessage ??= getApiErrorMessage(page.reason);
-        continue;
-      }
+    let incomplete = hitRequestLimit;
 
-      if (page.value.data.length === 0) {
-        incomplete = true;
-        continue;
-      }
+    for (let index = 0; index < offsets.length; index += ALL_INSPIRATIONS_MAX_CONCURRENCY) {
+      const offsetBatch = offsets.slice(index, index + ALL_INSPIRATIONS_MAX_CONCURRENCY);
+      const remainingPages = await Promise.allSettled(
+        offsetBatch.map((offset) => getInspirations({ limit: pageSize, offset, status })),
+      );
 
-      for (const item of page.value.data) {
-        if (seenIds.has(item.id)) {
+      for (const page of remainingPages) {
+        if (page.status === "rejected") {
+          incomplete = true;
+          warningReasons.add("request_failed");
           continue;
         }
 
-        seenIds.add(item.id);
-        items.push(item);
+        if (page.value.data.length === 0) {
+          incomplete = true;
+          warningReasons.add("request_failed");
+          continue;
+        }
+
+        for (const item of page.value.data) {
+          if (seenIds.has(item.id)) {
+            continue;
+          }
+
+          seenIds.add(item.id);
+          items.push(item);
+        }
       }
     }
 
     return {
       items,
       incomplete: incomplete || items.length < total,
-      errorMessage,
+      warningReasons: [...warningReasons],
     };
-  } catch (error) {
+  } catch {
     return {
       items: [],
       incomplete: true,
-      errorMessage: getApiErrorMessage(error),
+      warningReasons: ["request_failed"],
     };
   }
 }
