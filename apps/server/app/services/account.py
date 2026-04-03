@@ -186,4 +186,10 @@ def delete_account(authorization: str | None) -> None:
 
     with get_connection() as connection:
         connection.execute("DELETE FROM local_user WHERE id = 1")
+        # Rotate jwt_secret so all previously issued tokens become invalid
+        new_secret = secrets.token_hex(32)
+        connection.execute(
+            "UPDATE app_preferences SET jwt_secret = ? WHERE id = 1",
+            (new_secret,),
+        )
         connection.commit()

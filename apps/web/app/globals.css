@@ -1373,6 +1373,23 @@ img {
     line-height: 1.55;
   }
 
+  .mobile-account-form {
+    padding: 12px 16px 16px;
+  }
+
+  .mobile-account-form .settings-form {
+    gap: 12px;
+  }
+
+  .mobile-account-form .field input {
+    width: 100%;
+    min-height: 40px;
+    padding: 0 12px;
+    border-radius: 10px;
+    border: 1px solid var(--line-strong);
+    background: var(--bg-secondary);
+  }
+
   .settings-mobile-actions {
     display: grid;
     gap: 12px;

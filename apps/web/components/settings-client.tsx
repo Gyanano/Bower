@@ -97,6 +97,7 @@ export function SettingsClient({
   const [accountFeedback, setAccountFeedback] = useState<string | null>(null);
   const [accountError, setAccountError] = useState<string | null>(null);
   const [isAccountBusy, setIsAccountBusy] = useState(false);
+  const [showMobileAccount, setShowMobileAccount] = useState(false);
 
   // Fetch account status on mount
   useEffect(() => {
@@ -710,12 +711,61 @@ export function SettingsClient({
                 <span>{copy.guestMode}</span>
                 <button
                   className="account-mode-switch"
-                  onClick={() => setActiveSection("account")}
+                  onClick={() => setShowMobileAccount(!showMobileAccount)}
                   type="button"
                 >
-                  {copy.createAccount}
+                  {showMobileAccount ? copy.cancel : copy.createAccount}
                 </button>
               </div>
+              {showMobileAccount && (
+                <div className="mobile-account-form">
+                  {accountMode === "register" ? (
+                    <form className="settings-form" onSubmit={handleRegister}>
+                      <label className="field">
+                        <span>{copy.displayName}</span>
+                        <input onChange={(e) => setRegName(e.target.value)} placeholder={copy.displayNamePlaceholder} required type="text" value={regName} />
+                      </label>
+                      <label className="field">
+                        <span>{copy.emailLabel}</span>
+                        <input onChange={(e) => setRegEmail(e.target.value)} placeholder={copy.emailPlaceholder} required type="email" value={regEmail} />
+                      </label>
+                      <label className="field">
+                        <span>{copy.passwordLabel}</span>
+                        <input minLength={6} onChange={(e) => setRegPassword(e.target.value)} placeholder={copy.passwordPlaceholder} required type="password" value={regPassword} />
+                      </label>
+                      <div className="settings-actions">
+                        <button className="primary-button" disabled={isAccountBusy} type="submit">
+                          {isAccountBusy ? copy.registering : copy.createAccount}
+                        </button>
+                      </div>
+                      <button className="account-mode-switch" onClick={() => setAccountMode("login")} type="button">
+                        {copy.alreadyHaveAccount}
+                      </button>
+                    </form>
+                  ) : (
+                    <form className="settings-form" onSubmit={handleLogin}>
+                      <label className="field">
+                        <span>{copy.emailLabel}</span>
+                        <input onChange={(e) => setLoginEmail(e.target.value)} placeholder={copy.emailPlaceholder} required type="email" value={loginEmail} />
+                      </label>
+                      <label className="field">
+                        <span>{copy.passwordLabel}</span>
+                        <input onChange={(e) => setLoginPassword(e.target.value)} placeholder={copy.passwordPlaceholder} required type="password" value={loginPassword} />
+                      </label>
+                      <div className="settings-actions">
+                        <button className="primary-button" disabled={isAccountBusy} type="submit">
+                          {isAccountBusy ? copy.loggingIn : copy.loginButton}
+                        </button>
+                      </div>
+                      <button className="account-mode-switch" onClick={() => setAccountMode("register")} type="button">
+                        {copy.noAccountYet}
+                      </button>
+                    </form>
+                  )}
+                  {accountFeedback ? <p className="form-success">{accountFeedback}</p> : null}
+                  {accountError ? <p className="form-error">{accountError}</p> : null}
+                </div>
+              )}
             </div>
           )}
         </div>
