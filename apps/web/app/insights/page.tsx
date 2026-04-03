@@ -1,15 +1,21 @@
 import Link from "next/link";
 import { Icon } from "@/components/icons";
-import { getAppPreferences, getBoards, getInspirations } from "@/lib/api";
+import { getAllInspirations, getAppPreferences, getBoards, type InsightsWarningReason } from "@/lib/api";
 import { formatUtcTimestamp } from "@/lib/format";
 import { getDictionary } from "@/lib/i18n";
+
+const failedInsightsResult = {
+  items: [],
+  incomplete: true,
+  warningReasons: ["request_failed"] as InsightsWarningReason[],
+};
 
 export default async function InsightsPage() {
   const [preferencesResult, boardsResult, activeResult, archivedResult] = await Promise.allSettled([
     getAppPreferences(),
     getBoards(),
-    getInspirations({ status: "active", limit: 100 }),
-    getInspirations({ status: "archived", limit: 100 }),
+    getAllInspirations("active"),
+    getAllInspirations("archived"),
   ]);
 
   const preferences = preferencesResult.status === "fulfilled"
@@ -17,9 +23,25 @@ export default async function InsightsPage() {
     : { ui_language: "zh-CN" as const, updated_at: null };
   const copy = getDictionary(preferences.ui_language);
   const boards = boardsResult.status === "fulfilled" ? boardsResult.value.data : [];
-  const activeItems = activeResult.status === "fulfilled" ? activeResult.value.data : [];
-  const archivedItems = archivedResult.status === "fulfilled" ? archivedResult.value.data : [];
+  const activeData = activeResult.status === "fulfilled"
+    ? activeResult.value
+    : failedInsightsResult;
+  const archivedData = archivedResult.status === "fulfilled"
+    ? archivedResult.value
+    : failedInsightsResult;
+  const activeItems = activeData.items;
+  const archivedItems = archivedData.items;
   const allItems = [...activeItems, ...archivedItems];
+  const insightsWarningMessages = [...new Set([...activeData.warningReasons, ...archivedData.warningReasons])].map((reason) => {
+    switch (reason) {
+      case "request_limit_reached":
+        return copy.insightsLimitReachedWarning;
+      case "request_failed":
+      default:
+        return copy.insightsLoadIssueWarning;
+    }
+  });
+  const hasIncompleteInsights = activeData.incomplete || archivedData.incomplete;
   const analyzedCount = allItems.filter((item) => item.analysis_status === "completed").length;
   const recentAnalysisItems = [...allItems]
     .filter((item) => item.analysis_status === "completed" && item.analyzed_at)
@@ -74,6 +96,13 @@ export default async function InsightsPage() {
                 <p>{copy.insightsDescription}</p>
               </div>
             </header>
+
+            {hasIncompleteInsights ? (
+              <p className="insights-warning" role="status">
+                {copy.insightsIncompleteWarning}
+                {insightsWarningMessages.length ? ` (${insightsWarningMessages.join(" · ")})` : ""}
+              </p>
+            ) : null}
 
             <section className="insights-metrics">
               <article className="insight-card">
