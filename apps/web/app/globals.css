@@ -1387,7 +1387,7 @@ img {
     padding: 0 12px;
     border-radius: 10px;
     border: 1px solid var(--line-strong);
-    background: var(--bg-secondary);
+    background: var(--bg-input);
   }
 
   .settings-mobile-actions {
