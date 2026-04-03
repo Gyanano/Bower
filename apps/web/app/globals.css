@@ -831,6 +831,17 @@ img {
   padding: 10px 12px;
   border-radius: 12px;
   color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s ease;
+  background: none;
+  border: none;
+  font: inherit;
+  text-align: left;
+  width: 100%;
+}
+
+.settings-nav-item:hover:not(.active):not(.backlink) {
+  background: rgba(0, 0, 0, 0.04);
 }
 
 .settings-nav-item.active {
@@ -906,6 +917,104 @@ img {
 .language-toggle button.selected {
   background: var(--blue);
   color: white;
+}
+
+.account-profile-card {
+  padding: 18px;
+  border-radius: 18px;
+  background: var(--bg-muted);
+  display: grid;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.account-profile-card .profile-name {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.account-profile-card .profile-email {
+  color: var(--text-secondary);
+}
+
+.account-guest-card {
+  display: flex;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 18px;
+  background: var(--bg-muted);
+  margin-bottom: 8px;
+  align-items: flex-start;
+}
+
+.account-guest-card strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.account-guest-card p {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.account-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+.account-mode-switch {
+  background: none;
+  border: none;
+  color: var(--blue);
+  cursor: pointer;
+  font: inherit;
+  padding: 4px 0;
+  margin-top: 4px;
+}
+
+.account-mode-switch:hover {
+  text-decoration: underline;
+}
+
+.danger-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  padding: 0 18px;
+  border: 1px solid var(--danger);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--danger);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.danger-button:hover {
+  background: rgba(255, 59, 48, 0.08);
+}
+
+.danger-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.settings-sub-heading {
+  margin: 24px 0 8px;
+  font-size: 18px;
+}
+
+.secondary-button span {
+  margin-left: 6px;
+}
+
+.mobile-value {
+  color: var(--text-secondary);
 }
 
 .settings-mobile-frame {

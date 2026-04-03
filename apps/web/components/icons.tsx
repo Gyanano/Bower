@@ -32,6 +32,7 @@ type IconName =
   | "brush"
   | "archive"
   | "refresh"
+  | "log-out"
   | "x";
 
 export function Icon({ name, ...props }: SVGProps<SVGSVGElement> & { name: IconName }) {
@@ -76,6 +77,8 @@ export function Icon({ name, ...props }: SVGProps<SVGSVGElement> & { name: IconN
       return <svg {...iconProps} {...props}><rect x="4" y="4" width="16" height="4" rx="1" /><path d="M5.5 8.5v8a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-8" /><path d="M10 12h4" /></svg>;
     case "refresh":
       return <svg {...iconProps} {...props}><path d="M20 12a8 8 0 1 1-2.3-5.7" /><path d="M20 4v6h-6" /></svg>;
+    case "log-out":
+      return <svg {...iconProps} {...props}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>;
     case "x":
       return <svg {...iconProps} {...props}><path d="M6 6l12 12M18 6 6 18" /></svg>;
     default:

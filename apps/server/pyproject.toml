@@ -7,7 +7,10 @@ dependencies = [
   "fastapi>=0.115.12",
   "python-multipart>=0.0.20",
   "pydantic>=2.11.3",
-  "uvicorn>=0.34.0"
+  "pydantic[email]>=2.11.3",
+  "uvicorn>=0.34.0",
+  "bcrypt>=4.2.0",
+  "PyJWT>=2.9.0",
 ]
 
 [build-system]

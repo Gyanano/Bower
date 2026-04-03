@@ -191,6 +191,54 @@ export function SettingsClient({
     }
   }
 
+  // --- Mobile combined handler ---
+
+  async function handleMobileSaveAll() {
+    setAiError(null);
+    setAiFeedback(null);
+    setLangError(null);
+    setLangFeedback(null);
+    setIsTesting(true);
+
+    try {
+      const testResult = await testAiSettings(buildAiSettingsTestPayload());
+      setAiFeedback(testResult.data.message);
+    } catch (submissionError) {
+      setAiError(getApiErrorMessage(submissionError));
+      setIsTesting(false);
+      return;
+    }
+
+    setIsTesting(false);
+    setIsSaving(true);
+
+    const errors: string[] = [];
+    const [aiResult, langResult] = await Promise.allSettled([
+      updateAiSettings(buildAiSettingsUpdatePayload()),
+      updateAppPreferences({ ui_language: uiLanguage }),
+    ]);
+
+    if (aiResult.status === "rejected") {
+      errors.push(getApiErrorMessage(aiResult.reason));
+    } else {
+      setApiKey("");
+      setClearApiKey(false);
+    }
+
+    if (langResult.status === "rejected") {
+      errors.push(getApiErrorMessage(langResult.reason));
+    }
+
+    setIsSaving(false);
+
+    if (errors.length > 0) {
+      setAiError(errors.join("; "));
+    } else {
+      setAiFeedback(copy.actionSaved);
+      router.refresh();
+    }
+  }
+
   // --- Language handlers ---
 
   async function handleLangSave() {
@@ -264,7 +312,7 @@ export function SettingsClient({
     setAccountFeedback(null);
     setIsAccountBusy(true);
     try {
-      const payload: Record<string, string> = {};
+      const payload: Parameters<typeof updateAccountProfile>[0] = {};
       if (editName.trim()) payload.display_name = editName.trim();
       if (editEmail.trim()) payload.email = editEmail.trim();
       if (editNewPassword) {
@@ -594,36 +642,30 @@ export function SettingsClient({
       <div className="settings-desktop-frame">
         <aside className="settings-sidebar">
           <div className="settings-sidebar-title">{copy.settings}</div>
-          <div
+          <button
             className={`settings-nav-item${activeSection === "account" ? " active" : ""}`}
             onClick={() => setActiveSection("account")}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => e.key === "Enter" && setActiveSection("account")}
+            type="button"
           >
             <Icon name="user" width={16} height={16} />
             <span>{copy.accountLabel}</span>
-          </div>
-          <div
+          </button>
+          <button
             className={`settings-nav-item${activeSection === "ai-provider" ? " active" : ""}`}
             onClick={() => setActiveSection("ai-provider")}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => e.key === "Enter" && setActiveSection("ai-provider")}
+            type="button"
           >
             <Icon name="cpu" width={16} height={16} />
             <span>{copy.aiProvider}</span>
-          </div>
-          <div
+          </button>
+          <button
             className={`settings-nav-item${activeSection === "language" ? " active" : ""}`}
             onClick={() => setActiveSection("language")}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => e.key === "Enter" && setActiveSection("language")}
+            type="button"
           >
             <Icon name="brush" width={16} height={16} />
             <span>{copy.uiLanguage}</span>
-          </div>
+          </button>
           <Link className="settings-nav-item backlink" href="/inspirations">
             <Icon name="layout" width={16} height={16} />
             <span>{copy.backToWorkspace}</span>
@@ -734,7 +776,7 @@ export function SettingsClient({
           <button
             className="primary-button full-width"
             disabled={isSaving || isTesting || isLangSaving}
-            onClick={() => { void handleTestAndSave(); void handleLangSave(); }}
+            onClick={() => void handleMobileSaveAll()}
             type="button"
           >
             {isSaving || isLangSaving ? copy.saving : copy.saveAndTest}

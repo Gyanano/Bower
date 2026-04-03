@@ -41,10 +41,11 @@ def _get_or_create_jwt_secret() -> str:
 
 def _create_jwt(user_id: int) -> str:
     secret = _get_or_create_jwt_secret()
+    now = datetime.now(timezone.utc)
     payload = {
         "sub": str(user_id),
-        "exp": datetime.now(timezone.utc) + timedelta(days=JWT_EXPIRY_DAYS),
-        "iat": datetime.now(timezone.utc),
+        "exp": now + timedelta(days=JWT_EXPIRY_DAYS),
+        "iat": now,
     }
     return jwt.encode(payload, secret, algorithm=JWT_ALGORITHM)
 
