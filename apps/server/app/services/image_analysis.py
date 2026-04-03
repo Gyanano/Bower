@@ -12,13 +12,19 @@ ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages"
 GOOGLE_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 VOLCENGINE_CHAT_COMPLETIONS_URL = "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
 ANALYSIS_PROMPT = (
-    "Analyze this inspiration image for a design library. "
-    "Return JSON with keys summary, prompt_en, prompt_zh, tags_en, tags_zh, and colors. "
-    "summary must be one concise sentence. "
-    "prompt_en must be one complete English reverse prompt. "
-    "prompt_zh must be one complete Simplified Chinese reverse prompt. "
-    "tags_en and tags_zh must be arrays of 3 to 8 short style labels. "
-    "colors must be 3 to 6 dominant hex colors."
+    "Analyze this inspiration image for a local-first design reference library. "
+    "Focus on the visual subject, composition, materials, textures, lighting, color palette, mood, styling direction, "
+    "and any notable camera or layout cues that would help a designer or image model recreate the look. "
+    "Return JSON with keys summary, summary_en, summary_zh, prompt_en, prompt_zh, tags_en, tags_zh, and colors. "
+    "summary must match summary_en for backward compatibility. "
+    "summary_en must be one concise English sentence that captures the main subject and aesthetic. "
+    "summary_zh must be one concise Simplified Chinese sentence with the same meaning as summary_en. "
+    "prompt_en must be one detailed English reverse prompt written as a single complete sentence describing subject, style, "
+    "composition, lighting, textures/materials, color palette, and mood in image-generation-friendly language without bullet points. "
+    "prompt_zh must be one detailed Simplified Chinese reverse prompt with the same level of detail and no bullet points. "
+    "tags_en and tags_zh must be arrays of 5 to 10 short style labels covering subject, style, mood, material, palette, and composition. "
+    "colors must be 4 to 6 dominant hex colors sampled from the image. "
+    "Keep the output factual and grounded in the visible image content only."
 )
 CHAT_COMPLETION_PROMPT = f"{ANALYSIS_PROMPT} Reply with JSON only and no extra text."
 ANALYSIS_SCHEMA = {
@@ -26,14 +32,17 @@ ANALYSIS_SCHEMA = {
     "additionalProperties": False,
     "properties": {
         "summary": {"type": "string"},
+        "summary_en": {"type": "string"},
+        "summary_zh": {"type": "string"},
         "prompt_en": {"type": "string"},
         "prompt_zh": {"type": "string"},
         "tags_en": {"type": "array", "items": {"type": "string"}},
         "tags_zh": {"type": "array", "items": {"type": "string"}},
         "colors": {"type": "array", "items": {"type": "string"}},
     },
-    "required": ["summary", "prompt_en", "prompt_zh", "tags_en", "tags_zh", "colors"],
+    "required": ["summary", "summary_en", "summary_zh", "prompt_en", "prompt_zh", "tags_en", "tags_zh", "colors"],
 }
+SUPPORTED_IMAGE_MIME_TYPES = {"image/png", "image/jpeg", "image/webp"}
 
 
 def _error(status_code: int, code: str, message: str) -> AppError:
@@ -64,24 +73,43 @@ def _normalize_hex_colors(payload: object) -> list[str]:
     return colors[:6]
 
 
+def detect_supported_image_mime_type(payload: bytes) -> str | None:
+    if payload.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+
+    if payload.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+
+    if payload.startswith(b"RIFF") and payload[8:12] == b"WEBP":
+        return "image/webp"
+
+    return None
+
+
 def _normalize_result(payload: object) -> dict[str, object]:
     if not isinstance(payload, dict):
         raise _error(502, "AI_ANALYSIS_FAILED", "AI provider returned an invalid analysis payload")
 
     summary = str(payload.get("summary", "")).strip()
+    summary_en = str(payload.get("summary_en", "")).strip() or summary
+    summary_zh = str(payload.get("summary_zh", "")).strip() or summary
+    if not summary:
+        summary = summary_en or summary_zh
     prompt_en = str(payload.get("prompt_en", "")).strip()
     prompt_zh = str(payload.get("prompt_zh", "")).strip()
     tags_en = _normalize_string_list(payload.get("tags_en", []))
     tags_zh = _normalize_string_list(payload.get("tags_zh", []))
     colors = _normalize_hex_colors(payload.get("colors", []))
 
-    if not summary or not prompt_en or not prompt_zh:
+    if not summary or not summary_en or not summary_zh or not prompt_en or not prompt_zh:
         raise _error(502, "AI_ANALYSIS_FAILED", "AI provider returned an incomplete analysis payload")
     if not tags_en or not tags_zh or not colors:
         raise _error(502, "AI_ANALYSIS_FAILED", "AI provider returned an incomplete analysis payload")
 
     return {
         "summary": summary,
+        "summary_en": summary_en,
+        "summary_zh": summary_zh,
         "prompt_en": prompt_en,
         "prompt_zh": prompt_zh,
         "tags_en": tags_en[:12],

@@ -60,6 +60,8 @@ def _capture_request(captured: dict):
 def _analysis_payload(summary: str, tags: list[str]) -> dict[str, object]:
     return {
         "summary": summary,
+        "summary_en": summary,
+        "summary_zh": f"{summary} 的中文摘要。",
         "prompt_en": f"{summary} in English prompt form.",
         "prompt_zh": f"{summary} 的中文提示词版本。",
         "tags_en": tags,
@@ -89,6 +91,7 @@ def test_analyze_image_uses_openai_responses_api(monkeypatch, configure_provider
     assert captured["body"]["text"]["format"]["type"] == "json_schema"
     assert captured["body"]["input"][0]["content"][1]["image_url"].startswith("data:image/png;base64,")
     assert analysis["summary"] == "Minimal living room scene."
+    assert analysis["summary_zh"] == "Minimal living room scene. 的中文摘要。"
     assert analysis["tags_en"] == ["interior", "minimal", "living room"]
     assert analysis["prompt_zh"] == "Minimal living room scene. 的中文提示词版本。"
 
@@ -155,7 +158,16 @@ def test_analyze_image_uses_anthropic_messages_api(monkeypatch, configure_provid
     assert captured["headers"]["anthropic-version"] == "2023-06-01"
     assert captured["body"]["model"] == "claude-3-5-haiku-latest"
     assert captured["body"]["tool_choice"] == {"type": "tool", "name": "inspiration_analysis"}
-    assert captured["body"]["tools"][0]["input_schema"]["required"] == ["summary", "prompt_en", "prompt_zh", "tags_en", "tags_zh", "colors"]
+    assert captured["body"]["tools"][0]["input_schema"]["required"] == [
+        "summary",
+        "summary_en",
+        "summary_zh",
+        "prompt_en",
+        "prompt_zh",
+        "tags_en",
+        "tags_zh",
+        "colors",
+    ]
     assert captured["body"]["messages"][0]["content"][0]["source"]["media_type"] == "image/jpeg"
     assert analysis["summary"] == "Editorial monochrome fashion image."
     assert analysis["tags_en"] == ["editorial", "monochrome", "fashion"]
@@ -189,7 +201,16 @@ def test_analyze_image_uses_google_generate_content(monkeypatch, configure_provi
     assert captured["url"] == "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
     assert captured["headers"]["x-goog-api-key"] == "test-key"
     assert captured["body"]["generationConfig"]["responseMimeType"] == "application/json"
-    assert captured["body"]["generationConfig"]["responseJsonSchema"]["required"] == ["summary", "prompt_en", "prompt_zh", "tags_en", "tags_zh", "colors"]
+    assert captured["body"]["generationConfig"]["responseJsonSchema"]["required"] == [
+        "summary",
+        "summary_en",
+        "summary_zh",
+        "prompt_en",
+        "prompt_zh",
+        "tags_en",
+        "tags_zh",
+        "colors",
+    ]
     assert captured["body"]["contents"][0]["parts"][0]["inlineData"]["mimeType"] == "image/webp"
     assert analysis["summary"] == "Muted product hero image."
     assert analysis["tags_zh"] == ["product-zh", "muted-zh", "hero-zh"]

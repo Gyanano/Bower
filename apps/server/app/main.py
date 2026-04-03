@@ -1,11 +1,13 @@
+import asyncio
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes.account import router as account_router
 from app.api.routes.boards import router as boards_router
+from app.api.routes.image_analysis import router as image_analysis_router
 from app.api.routes.inspirations import router as inspirations_router
 from app.api.routes.settings_ai import router as settings_ai_router
 from app.api.routes.settings_preferences import router as settings_preferences_router
@@ -34,6 +36,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_origin_regex=r"(chrome-extension|moz-extension)://.*",
 )
 
 
@@ -42,7 +45,21 @@ def healthcheck():
     return {"status": "ok"}
 
 
+@app.websocket("/ws/events")
+async def events_socket(websocket: WebSocket):
+    await websocket.accept()
+    await websocket.send_json({"type": "ready"})
+    try:
+        while True:
+            await websocket.receive()
+    except WebSocketDisconnect:
+        return
+    except RuntimeError:
+        await asyncio.sleep(0)
+
+
 app.include_router(inspirations_router, prefix="/api/v1")
+app.include_router(image_analysis_router, prefix="/api/v1")
 app.include_router(boards_router, prefix="/api/v1")
 app.include_router(settings_ai_router, prefix="/api/v1")
 app.include_router(settings_preferences_router, prefix="/api/v1")
