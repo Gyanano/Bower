@@ -115,6 +115,17 @@ export interface AuthTokenResponse {
   profile: AccountProfile;
 }
 
+export type InsightsWarningReason = "request_failed" | "request_limit_reached";
+
+export interface AllInspirationsResult {
+  items: InspirationListItem[];
+  incomplete: boolean;
+  warningReasons: InsightsWarningReason[];
+}
+
+const ALL_INSPIRATIONS_MAX_PAGES = 10;
+const ALL_INSPIRATIONS_MAX_CONCURRENCY = 4;
+
 interface ApiErrorEnvelope {
   error: {
     code: string;
@@ -191,6 +202,80 @@ export async function getInspirations(params?: {
   return apiFetch<{ data: InspirationListItem[]; meta: { limit: number; offset: number; total: number } }>(
     `/inspirations?${searchParams.toString()}`,
   );
+}
+
+export async function getAllInspirations(status: "active" | "archived", pageSize = 100): Promise<AllInspirationsResult> {
+  try {
+    const firstPage = await getInspirations({ limit: pageSize, offset: 0, status });
+    const items = [...firstPage.data];
+    const seenIds = new Set(items.map((item) => item.id));
+    const total = firstPage.meta.total;
+    const warningReasons = new Set<InsightsWarningReason>();
+
+    if (total <= items.length) {
+      return {
+        items,
+        incomplete: false,
+        warningReasons: [],
+      };
+    }
+
+    const remainingPageBudget = Math.max(ALL_INSPIRATIONS_MAX_PAGES - 1, 0);
+    const offsets: number[] = [];
+    for (let offset = pageSize; offset < total && offsets.length < remainingPageBudget; offset += pageSize) {
+      offsets.push(offset);
+    }
+
+    const hitRequestLimit = pageSize * ALL_INSPIRATIONS_MAX_PAGES < total;
+
+    if (hitRequestLimit) {
+      warningReasons.add("request_limit_reached");
+    }
+
+    let incomplete = hitRequestLimit;
+
+    for (let index = 0; index < offsets.length; index += ALL_INSPIRATIONS_MAX_CONCURRENCY) {
+      const offsetBatch = offsets.slice(index, index + ALL_INSPIRATIONS_MAX_CONCURRENCY);
+      const remainingPages = await Promise.allSettled(
+        offsetBatch.map((offset) => getInspirations({ limit: pageSize, offset, status })),
+      );
+
+      for (const page of remainingPages) {
+        if (page.status === "rejected") {
+          incomplete = true;
+          warningReasons.add("request_failed");
+          continue;
+        }
+
+        if (page.value.data.length === 0) {
+          incomplete = true;
+          warningReasons.add("request_failed");
+          continue;
+        }
+
+        for (const item of page.value.data) {
+          if (seenIds.has(item.id)) {
+            continue;
+          }
+
+          seenIds.add(item.id);
+          items.push(item);
+        }
+      }
+    }
+
+    return {
+      items,
+      incomplete: incomplete || items.length < total,
+      warningReasons: [...warningReasons],
+    };
+  } catch {
+    return {
+      items: [],
+      incomplete: true,
+      warningReasons: ["request_failed"],
+    };
+  }
 }
 
 export async function getInspiration(id: string) {
