@@ -139,3 +139,11 @@ def test_delete_account():
     data = resp.json()["data"]
     assert data["logged_in"] is False
     assert data["profile"] is None
+
+    # old token should be rejected after jwt_secret rotation
+    resp = client.put(
+        "/api/v1/settings/account/profile",
+        json={"display_name": "ghost"},
+        headers=_auth_header(token),
+    )
+    assert resp.status_code == 401
