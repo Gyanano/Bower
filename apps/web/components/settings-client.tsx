@@ -98,6 +98,7 @@ export function SettingsClient({
   const [accountError, setAccountError] = useState<string | null>(null);
   const [isAccountBusy, setIsAccountBusy] = useState(false);
   const [showMobileAccount, setShowMobileAccount] = useState(false);
+  const [showMobileProfile, setShowMobileProfile] = useState(false);
 
   // Fetch account status on mount
   useEffect(() => {
@@ -201,33 +202,39 @@ export function SettingsClient({
     setLangFeedback(null);
     setIsTesting(true);
 
+    let aiTestPassed = false;
     try {
       const testResult = await testAiSettings(buildAiSettingsTestPayload());
       setAiFeedback(testResult.data.message);
+      aiTestPassed = true;
     } catch (submissionError) {
       setAiError(getApiErrorMessage(submissionError));
-      setIsTesting(false);
-      return;
     }
 
     setIsTesting(false);
     setIsSaving(true);
 
     const errors: string[] = [];
-    const [aiResult, langResult] = await Promise.allSettled([
-      updateAiSettings(buildAiSettingsUpdatePayload()),
+    const savePromises: Promise<unknown>[] = [
       updateAppPreferences({ ui_language: uiLanguage }),
-    ]);
-
-    if (aiResult.status === "rejected") {
-      errors.push(getApiErrorMessage(aiResult.reason));
-    } else {
-      setApiKey("");
-      setClearApiKey(false);
+    ];
+    if (aiTestPassed) {
+      savePromises.push(updateAiSettings(buildAiSettingsUpdatePayload()));
     }
 
-    if (langResult.status === "rejected") {
-      errors.push(getApiErrorMessage(langResult.reason));
+    const results = await Promise.allSettled(savePromises);
+
+    // Language result is always first
+    if (results[0].status === "rejected") {
+      errors.push(getApiErrorMessage(results[0].reason));
+    }
+
+    // AI result is second (only if test passed)
+    if (aiTestPassed && results[1]?.status === "rejected") {
+      errors.push(getApiErrorMessage(results[1].reason));
+    } else if (aiTestPassed && results[1]?.status === "fulfilled") {
+      setApiKey("");
+      setClearApiKey(false);
     }
 
     setIsSaving(false);
@@ -700,10 +707,48 @@ export function SettingsClient({
                 <span className="mobile-value">{accountStatus.profile.email}</span>
               </div>
               <div className="mobile-list-item">
-                <button className="account-mode-switch" onClick={handleLogout} type="button">
-                  {copy.logoutButton}
+                <button className="account-mode-switch" onClick={() => setShowMobileProfile(!showMobileProfile)} type="button">
+                  {showMobileProfile ? copy.cancel : copy.editProfile}
                 </button>
               </div>
+              {showMobileProfile && (
+                <div className="mobile-account-form">
+                  <form className="settings-form" onSubmit={handleUpdateProfile}>
+                    <label className="field">
+                      <span>{copy.displayName}</span>
+                      <input onChange={(e) => setEditName(e.target.value)} placeholder={copy.displayNamePlaceholder} type="text" value={editName} />
+                    </label>
+                    <label className="field">
+                      <span>{copy.emailLabel}</span>
+                      <input onChange={(e) => setEditEmail(e.target.value)} placeholder={copy.emailPlaceholder} type="email" value={editEmail} />
+                    </label>
+                    <label className="field">
+                      <span>{copy.currentPasswordLabel}</span>
+                      <input onChange={(e) => setEditCurrentPassword(e.target.value)} type="password" value={editCurrentPassword} />
+                    </label>
+                    <label className="field">
+                      <span>{copy.newPasswordLabel}</span>
+                      <input onChange={(e) => setEditNewPassword(e.target.value)} placeholder={copy.newPasswordPlaceholder} type="password" value={editNewPassword} />
+                    </label>
+                    <div className="settings-actions">
+                      <button className="primary-button" disabled={isAccountBusy} type="submit">
+                        {isAccountBusy ? copy.updatingProfile : copy.updateProfile}
+                      </button>
+                    </div>
+                  </form>
+                  <div className="account-actions">
+                    <button className="secondary-button" onClick={handleLogout} type="button">
+                      <Icon name="log-out" width={16} height={16} />
+                      <span>{copy.logoutButton}</span>
+                    </button>
+                    <button className="danger-button" disabled={isAccountBusy} onClick={handleDeleteAccount} type="button">
+                      {copy.deleteAccount}
+                    </button>
+                  </div>
+                  {accountFeedback ? <p className="form-success">{accountFeedback}</p> : null}
+                  {accountError ? <p className="form-error">{accountError}</p> : null}
+                </div>
+              )}
             </div>
           ) : (
             <div className="mobile-list-group">
