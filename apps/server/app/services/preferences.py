@@ -1,11 +1,6 @@
-from datetime import datetime, timezone
-
 from app.db.sqlite import DEFAULT_UI_LANGUAGE, get_connection
 from app.schemas.preferences import AppPreferences, AppPreferencesEnvelope, AppPreferencesUpdate
-
-
-def _utc_now() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+from app.utils import utc_now
 
 
 def get_app_preferences() -> AppPreferencesEnvelope:
@@ -25,7 +20,7 @@ def get_app_preferences() -> AppPreferencesEnvelope:
 
 
 def update_app_preferences(payload: AppPreferencesUpdate) -> AppPreferencesEnvelope:
-    updated_at = _utc_now()
+    updated_at = utc_now()
     with get_connection() as connection:
         connection.execute(
             """
