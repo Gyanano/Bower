@@ -80,6 +80,41 @@ export interface AppPreferences {
   updated_at: string | null;
 }
 
+export interface AccountProfile {
+  display_name: string;
+  email: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AccountStatus {
+  logged_in: boolean;
+  profile: AccountProfile | null;
+}
+
+export interface AccountRegisterPayload {
+  display_name: string;
+  email: string;
+  password: string;
+}
+
+export interface AccountLoginPayload {
+  email: string;
+  password: string;
+}
+
+export interface AccountProfileUpdatePayload {
+  display_name?: string;
+  email?: string;
+  current_password?: string;
+  new_password?: string;
+}
+
+export interface AuthTokenResponse {
+  token: string;
+  profile: AccountProfile;
+}
+
 export type InsightsWarningReason = "request_failed" | "request_limit_reached";
 
 export interface AllInspirationsResult {
@@ -334,4 +369,70 @@ export function getApiErrorMessage(error: unknown) {
   }
 
   return "Request failed";
+}
+
+const AUTH_TOKEN_KEY = "bower_auth_token";
+
+export function getAuthToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(AUTH_TOKEN_KEY);
+}
+
+export function setAuthToken(token: string) {
+  localStorage.setItem(AUTH_TOKEN_KEY, token);
+}
+
+export function clearAuthToken() {
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+}
+
+function authHeaders(): Record<string, string> {
+  const token = getAuthToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+export async function getAccountStatus() {
+  return apiFetch<{ data: AccountStatus }>("/settings/account", {
+    headers: { ...authHeaders() },
+  });
+}
+
+export async function registerAccount(payload: AccountRegisterPayload) {
+  const result = await apiFetch<{ data: AuthTokenResponse }>("/settings/account/register", {
+    body: JSON.stringify(payload),
+    headers: { "content-type": "application/json" },
+    method: "POST",
+  });
+  setAuthToken(result.data.token);
+  return result;
+}
+
+export async function loginAccount(payload: AccountLoginPayload) {
+  const result = await apiFetch<{ data: AuthTokenResponse }>("/settings/account/login", {
+    body: JSON.stringify(payload),
+    headers: { "content-type": "application/json" },
+    method: "POST",
+  });
+  setAuthToken(result.data.token);
+  return result;
+}
+
+export async function updateAccountProfile(payload: AccountProfileUpdatePayload) {
+  return apiFetch<{ data: AccountProfile }>("/settings/account/profile", {
+    body: JSON.stringify(payload),
+    headers: { "content-type": "application/json", ...authHeaders() },
+    method: "PUT",
+  });
+}
+
+export async function deleteAccount() {
+  await apiFetch<void>("/settings/account", {
+    headers: { ...authHeaders() },
+    method: "DELETE",
+  });
+  clearAuthToken();
+}
+
+export function logoutAccount() {
+  clearAuthToken();
 }

@@ -1,6 +1,7 @@
 import sqlite3
-from datetime import datetime, timezone
 from pathlib import Path
+
+from app.utils import utc_now
 
 BASE_DIR = Path(__file__).resolve().parents[4]
 DATA_DIR = BASE_DIR / "data"
@@ -11,10 +12,6 @@ DEFAULT_BOARDS = (
     ("board_landing", "落地页排版", "landing-page-layout"),
 )
 DEFAULT_UI_LANGUAGE = "zh-CN"
-
-
-def _utc_now() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def get_connection() -> sqlite3.Connection:
@@ -87,6 +84,22 @@ def initialize_database() -> None:
             )
             """
         )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS local_user (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                display_name TEXT NOT NULL,
+                email TEXT NOT NULL,
+                password_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+
+        pref_columns = {row["name"] for row in connection.execute("PRAGMA table_info(app_preferences)").fetchall()}
+        if "jwt_secret" not in pref_columns:
+            connection.execute("ALTER TABLE app_preferences ADD COLUMN jwt_secret TEXT NULL")
 
         columns = {row["name"] for row in connection.execute("PRAGMA table_info(inspirations)").fetchall()}
         board_id_added = "board_id" not in columns
@@ -120,7 +133,7 @@ def initialize_database() -> None:
         if "archived_at" not in columns:
             connection.execute("ALTER TABLE inspirations ADD COLUMN archived_at TEXT NULL")
 
-        seeded_at = _utc_now()
+        seeded_at = utc_now()
         for board_id, board_name, board_slug in DEFAULT_BOARDS:
             connection.execute(
                 """

@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function AISettingsPage() {
-  redirect("/settings?section=ai");
+  redirect("/settings");
 }

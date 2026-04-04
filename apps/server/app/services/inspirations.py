@@ -2,7 +2,6 @@ import hashlib
 import json
 import mimetypes
 import os
-from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
@@ -23,6 +22,7 @@ from app.schemas.inspiration import (
 )
 from app.services.image_analysis import analyze_image
 from app.storage.local_files import MAX_FILE_SIZE_BYTES, STORE_DIR, persist_upload
+from app.utils import utc_now
 
 ALLOWED_MIME_TYPES = {"image/png", "image/jpeg", "image/webp"}
 
@@ -38,10 +38,6 @@ def _detect_mime_type(payload: bytes) -> str | None:
         return "image/webp"
 
     return None
-
-
-def _utc_now() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def _build_id() -> str:
@@ -216,7 +212,7 @@ async def create_inspiration(
         raise _error(413, "FILE_TOO_LARGE", f"File exceeds {MAX_FILE_SIZE_BYTES} bytes")
 
     normalized_source_url = _normalize_source_url(source_url)
-    created_at = _utc_now()
+    created_at = utc_now()
     updated_at = created_at
     content_hash = hashlib.sha256(payload).hexdigest()
     storage_key = f"store/{content_hash[:2]}/{content_hash[2:4]}/{content_hash}-{uuid4().hex[:8]}"
@@ -441,7 +437,7 @@ def update_inspiration_metadata(inspiration_id: str, patch: InspirationMetadataP
         else:
             updates[field_name] = _normalize_optional_text(getattr(patch, field_name))
 
-    updates["updated_at"] = _utc_now()
+    updates["updated_at"] = utc_now()
 
     assignments = ", ".join(f"{field_name} = ?" for field_name in updates)
     values = [updates[field_name] for field_name in updates]
@@ -464,7 +460,7 @@ def archive_inspiration(inspiration_id: str) -> InspirationDetailEnvelope:
     if record.status == "archived":
         return InspirationDetailEnvelope(data=InspirationDetail.model_validate(_detail_payload(record)))
 
-    archived_at = _utc_now()
+    archived_at = utc_now()
 
     with get_connection() as connection:
         connection.execute(
@@ -484,7 +480,7 @@ def analyze_inspiration(inspiration_id: str) -> InspirationDetailEnvelope:
     record = _fetch_record(inspiration_id)
     stored_path = STORE_DIR / Path(record.storage_key).relative_to("store")
 
-    processing_at = _utc_now()
+    processing_at = utc_now()
     with get_connection() as connection:
         connection.execute(
             """
@@ -505,7 +501,7 @@ def analyze_inspiration(inspiration_id: str) -> InspirationDetailEnvelope:
                 SET analysis_status = 'failed', analysis_error = ?, updated_at = ?
                 WHERE id = ?
                 """,
-                (message, _utc_now(), inspiration_id),
+                (message, utc_now(), inspiration_id),
             )
             connection.commit()
         raise _error(500, "SAVE_FAILED", message)
@@ -521,7 +517,7 @@ def analyze_inspiration(inspiration_id: str) -> InspirationDetailEnvelope:
                 SET analysis_status = 'failed', analysis_error = ?, updated_at = ?
                 WHERE id = ?
                 """,
-                (message, _utc_now(), inspiration_id),
+                (message, utc_now(), inspiration_id),
             )
             connection.commit()
         raise _error(500, "SAVE_FAILED", message) from exc
@@ -529,7 +525,7 @@ def analyze_inspiration(inspiration_id: str) -> InspirationDetailEnvelope:
     try:
         analysis = analyze_image(payload=payload, mime_type=record.mime_type)
     except AppError as exc:
-        failed_at = _utc_now()
+        failed_at = utc_now()
         with get_connection() as connection:
             connection.execute(
                 """
@@ -542,7 +538,7 @@ def analyze_inspiration(inspiration_id: str) -> InspirationDetailEnvelope:
             connection.commit()
         raise
 
-    analyzed_at = _utc_now()
+    analyzed_at = utc_now()
 
     with get_connection() as connection:
         connection.execute(
