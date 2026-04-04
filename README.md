@@ -284,14 +284,6 @@ This repository is in active product iteration. The current codebase already cov
 
 This repository is licensed under the `MIT` License. See [`LICENSE`](./LICENSE).
 
-## Conceptual Workflow Curve
+## Star History
 
-The chart below is an illustrative workflow curve for how Bower is meant to be used. It is not product telemetry.
-
-```mermaid
-xychart-beta
-    title "Bower Workflow Curve"
-    x-axis ["Collect","Organize","Analyze","Review","Reuse"]
-    y-axis "Workflow Depth" 0 --> 100
-    line [22, 48, 84, 69, 92]
-```
+[![Star History Chart](https://api.star-history.com/svg?repos=Gyanano/Bower&type=Date)](https://www.star-history.com/#Gyanano/Bower&Date)
