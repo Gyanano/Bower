@@ -19,7 +19,7 @@
     <img alt="Local First" src="https://img.shields.io/badge/Data%20%26%20Privacy-Local--First-6b7f64?style=for-the-badge" />
   </a>
   <a href="#license">
-    <img alt="License Pending" src="https://img.shields.io/badge/Open%20Source%20License-Pending-d0aa65?style=for-the-badge" />
+    <img alt="License MIT" src="https://img.shields.io/badge/Open%20Source%20License-MIT-d0aa65?style=for-the-badge" />
   </a>
 </p>
 
@@ -282,7 +282,7 @@ This repository is in active product iteration. The current codebase already cov
 
 ## License
 
-There is currently no `LICENSE` file committed in the repository, so the open-source license should be treated as pending until one is added.
+This repository is licensed under the `MIT` License. See [`LICENSE`](./LICENSE).
 
 ## Conceptual Workflow Curve
 
