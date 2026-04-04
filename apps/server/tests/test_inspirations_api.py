@@ -1,3 +1,4 @@
+import json
 import sqlite3
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -5,6 +6,7 @@ from tempfile import TemporaryDirectory
 import pytest
 from fastapi.testclient import TestClient
 
+from app.api.routes import image_analysis as image_analysis_route
 from app.db import sqlite
 from app.main import app
 from app.services import image_analysis
@@ -80,6 +82,11 @@ def test_upload_list_detail_and_inline_file_flow(client: TestClient):
     assert file_response.headers["content-type"] == "image/png"
     assert file_response.headers["content-disposition"].startswith("inline;")
     assert 'filename="sample.png"' in file_response.headers["content-disposition"]
+
+
+def test_websocket_events_endpoint_accepts_connections(client: TestClient):
+    with client.websocket_connect("/ws/events") as websocket:
+        assert websocket.receive_json() == {"type": "ready"}
 
 
 @pytest.mark.parametrize(
@@ -317,6 +324,152 @@ def test_analyze_flow_persists_summary_tags_and_timestamp(client: TestClient, mo
     assert detail.json()["data"]["analysis_summary"] == analyzed["analysis_summary"]
     assert detail.json()["data"]["analysis_tags"] == analyzed["analysis_tags"]
     assert detail.json()["data"]["analyzed_at"] == analyzed["analyzed_at"]
+
+
+def test_browser_extension_analysis_endpoint_returns_structured_result(client: TestClient, monkeypatch):
+    def fake_analyze_image(*, payload: bytes, mime_type: str):
+        assert payload == PNG_BYTES
+        assert mime_type == "image/png"
+        return {
+            "summary": "Editorial product photo with a muted neutral palette.",
+            "summary_en": "Editorial product photo with a muted neutral palette.",
+            "summary_zh": "一张具有柔和中性色调的编辑感产品照片。",
+            "prompt_en": "An editorial product photo with a muted neutral palette, soft daylight, clean composition, and tactile material detail.",
+            "prompt_zh": "一张编辑感产品照片，具有柔和中性色调、自然柔光、干净构图和清晰材质细节。",
+            "tags_en": ["product", "editorial", "neutral", "soft light", "minimal"],
+            "tags_zh": ["产品", "编辑感", "中性色", "柔光", "极简"],
+            "colors": ["#F1EEE8", "#D7CFC4", "#A99987", "#544A41"],
+        }
+
+    monkeypatch.setattr(image_analysis, "analyze_image", fake_analyze_image)
+    monkeypatch.setattr(image_analysis_route, "analyze_image", fake_analyze_image)
+
+    response = client.post(
+        "/api/v1/image-analysis/analyze",
+        files={"file": ("sample.png", PNG_BYTES, "image/png")},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "data": {
+            "summary": "Editorial product photo with a muted neutral palette.",
+            "summary_en": "Editorial product photo with a muted neutral palette.",
+            "summary_zh": "一张具有柔和中性色调的编辑感产品照片。",
+            "prompt_en": "An editorial product photo with a muted neutral palette, soft daylight, clean composition, and tactile material detail.",
+            "prompt_zh": "一张编辑感产品照片，具有柔和中性色调、自然柔光、干净构图和清晰材质细节。",
+            "tags_en": ["product", "editorial", "neutral", "soft light", "minimal"],
+            "tags_zh": ["产品", "编辑感", "中性色", "柔光", "极简"],
+            "colors": ["#F1EEE8", "#D7CFC4", "#A99987", "#544A41"],
+        }
+    }
+
+
+def test_browser_extension_clip_endpoint_persists_analysis_result(client: TestClient):
+    response = client.post(
+        "/api/v1/image-analysis/clip",
+        data={
+            "source_url": " https://example.com/reference ",
+            "title": "浏览器摘录",
+            "summary": "Warm neutral product setup.",
+            "summary_en": "Warm neutral product setup.",
+            "summary_zh": "暖中性色调的产品布景。",
+            "prompt_en": "A warm neutral product setup with soft daylight and tactile materials.",
+            "prompt_zh": "一个暖中性色调的产品布景，具有柔和自然光和清晰材质细节。",
+            "tags_en": json.dumps(["product", "warm neutral", "soft light"]),
+            "tags_zh": json.dumps(["产品", "暖中性色", "柔光"]),
+            "colors": json.dumps(["#F2E6D8", "#C8B29E", "#6F6258"]),
+        },
+        files={"file": ("sample.png", PNG_BYTES, "image/png")},
+    )
+
+    assert response.status_code == 201
+    clipped = response.json()["data"]
+
+    assert clipped["title"] == "浏览器摘录"
+    assert clipped["source_url"] == "https://example.com/reference"
+    assert clipped["analysis_summary"] == "Warm neutral product setup."
+    assert clipped["analysis_prompt_en"] == "A warm neutral product setup with soft daylight and tactile materials."
+    assert clipped["analysis_prompt_zh"] == "一个暖中性色调的产品布景，具有柔和自然光和清晰材质细节。"
+    assert clipped["analysis_tags_en"] == ["product", "warm neutral", "soft light"]
+    assert clipped["analysis_tags_zh"] == ["产品", "暖中性色", "柔光"]
+    assert clipped["analysis_colors"] == ["#F2E6D8", "#C8B29E", "#6F6258"]
+    assert clipped["analysis_status"] == "completed"
+    assert clipped["analyzed_at"] is not None
+
+    detail = client.get(f'/api/v1/inspirations/{clipped["id"]}')
+
+    assert detail.status_code == 200
+    assert detail.json()["data"]["analysis_status"] == "completed"
+    assert detail.json()["data"]["analysis_tags"] == ["product", "warm neutral", "soft light"]
+
+
+def test_browser_extension_clip_deduplicates_by_source_url(client: TestClient):
+    payload = {
+        "source_url": " https://example.com/reference/dedupe ",
+        "title": "第一次摘录",
+        "summary": "Warm neutral product setup.",
+        "summary_en": "Warm neutral product setup.",
+        "summary_zh": "暖中性色调的产品布景。",
+        "prompt_en": "A warm neutral product setup with soft daylight and tactile materials.",
+        "prompt_zh": "一个暖中性色调的产品布景，具有柔和自然光和清晰材质细节。",
+        "tags_en": json.dumps(["product", "warm neutral", "soft light"]),
+        "tags_zh": json.dumps(["产品", "暖中性色", "柔光"]),
+        "colors": json.dumps(["#F2E6D8", "#C8B29E", "#6F6258"]),
+    }
+
+    first = client.post(
+        "/api/v1/image-analysis/clip",
+        data=payload,
+        files={"file": ("sample.png", PNG_BYTES, "image/png")},
+    )
+    second = client.post(
+        "/api/v1/image-analysis/clip",
+        data={**payload, "title": "第二次摘录"},
+        files={"file": ("sample-again.png", PNG_BYTES, "image/png")},
+    )
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert second.json()["data"]["id"] == first.json()["data"]["id"]
+    assert second.json()["data"]["title"] == "第一次摘录"
+
+    listed = client.get("/api/v1/inspirations")
+
+    assert listed.status_code == 200
+    assert listed.json()["meta"]["total"] == 1
+
+
+def test_browser_extension_clip_allows_duplicates_without_source_url(client: TestClient):
+    payload = {
+        "summary": "Warm neutral product setup.",
+        "summary_en": "Warm neutral product setup.",
+        "summary_zh": "暖中性色调的产品布景。",
+        "prompt_en": "A warm neutral product setup with soft daylight and tactile materials.",
+        "prompt_zh": "一个暖中性色调的产品布景，具有柔和自然光和清晰材质细节。",
+        "tags_en": json.dumps(["product", "warm neutral", "soft light"]),
+        "tags_zh": json.dumps(["产品", "暖中性色", "柔光"]),
+        "colors": json.dumps(["#F2E6D8", "#C8B29E", "#6F6258"]),
+    }
+
+    first = client.post(
+        "/api/v1/image-analysis/clip",
+        data=payload,
+        files={"file": ("sample.png", PNG_BYTES, "image/png")},
+    )
+    second = client.post(
+        "/api/v1/image-analysis/clip",
+        data=payload,
+        files={"file": ("sample-again.png", PNG_BYTES, "image/png")},
+    )
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert second.json()["data"]["id"] != first.json()["data"]["id"]
+
+    listed = client.get("/api/v1/inspirations")
+
+    assert listed.status_code == 200
+    assert listed.json()["meta"]["total"] == 2
 
 
 def test_boards_search_and_board_filtering(client: TestClient, monkeypatch):

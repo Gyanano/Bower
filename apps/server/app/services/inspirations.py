@@ -20,24 +20,11 @@ from app.schemas.inspiration import (
     InspirationMetadataPatch,
     PaginationMeta,
 )
-from app.services.image_analysis import analyze_image
+from app.services.image_analysis import SUPPORTED_IMAGE_MIME_TYPES, analyze_image, detect_supported_image_mime_type
 from app.storage.local_files import MAX_FILE_SIZE_BYTES, STORE_DIR, persist_upload
 from app.utils import utc_now
 
-ALLOWED_MIME_TYPES = {"image/png", "image/jpeg", "image/webp"}
-
-
-def _detect_mime_type(payload: bytes) -> str | None:
-    if payload.startswith(b"\x89PNG\r\n\x1a\n"):
-        return "image/png"
-
-    if payload.startswith(b"\xff\xd8\xff"):
-        return "image/jpeg"
-
-    if payload.startswith(b"RIFF") and payload[8:12] == b"WEBP":
-        return "image/webp"
-
-    return None
+ALLOWED_MIME_TYPES = SUPPORTED_IMAGE_MIME_TYPES
 
 
 def _build_id() -> str:
@@ -105,6 +92,18 @@ def _validate_board_id(board_id: str | None) -> str:
     if row is None:
         raise _error(422, "BOARD_NOT_FOUND", "Selected board does not exist")
     return candidate
+
+
+def _normalize_string_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+
+    normalized: list[str] = []
+    for item in value:
+        text = _normalize_optional_text(str(item))
+        if text:
+            normalized.append(text)
+    return normalized
 
 
 def _row_to_record(row) -> InspirationRecord:
@@ -191,6 +190,19 @@ def _fetch_record_query() -> str:
     """
 
 
+def _find_record_by_source_url(source_url: str) -> InspirationRecord | None:
+    with get_connection() as connection:
+        row = connection.execute(
+            f"{_fetch_record_query()} WHERE inspirations.source_url = ? ORDER BY datetime(inspirations.created_at) DESC, inspirations.id DESC LIMIT 1",
+            (source_url,),
+        ).fetchone()
+
+    if row is None:
+        return None
+
+    return _row_to_record(row)
+
+
 async def create_inspiration(
     file: UploadFile | None,
     source_url: str | None,
@@ -204,7 +216,7 @@ async def create_inspiration(
     if not payload:
         raise _error(400, "MISSING_FILE", "Image file is required")
 
-    detected_mime_type = _detect_mime_type(payload)
+    detected_mime_type = detect_supported_image_mime_type(payload)
     if detected_mime_type not in ALLOWED_MIME_TYPES:
         raise _error(400, "INVALID_FILE_TYPE", "Only PNG, JPEG, and WEBP files are supported")
 
@@ -246,6 +258,145 @@ async def create_inspiration(
         created_at=created_at,
         updated_at=updated_at,
         analyzed_at=None,
+        archived_at=None,
+    )
+
+    try:
+        with get_connection() as connection:
+            connection.execute(
+                """
+                INSERT INTO inspirations (
+                    id,
+                    board_id,
+                    title,
+                    notes,
+                    source_url,
+                    analysis_summary,
+                    analysis_tags_json,
+                    analysis_prompt_en,
+                    analysis_prompt_zh,
+                    analysis_tags_en_json,
+                    analysis_tags_zh_json,
+                    analysis_colors_json,
+                    analysis_status,
+                    analysis_error,
+                    original_filename,
+                    mime_type,
+                    file_size_bytes,
+                    storage_key,
+                    created_at,
+                    updated_at,
+                    status,
+                    analyzed_at,
+                    archived_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    record.id,
+                    record.board_id,
+                    record.title,
+                    record.notes,
+                    record.source_url,
+                    record.analysis_summary,
+                    record.analysis_tags_json,
+                    record.analysis_prompt_en,
+                    record.analysis_prompt_zh,
+                    record.analysis_tags_en_json,
+                    record.analysis_tags_zh_json,
+                    record.analysis_colors_json,
+                    record.analysis_status,
+                    record.analysis_error,
+                    record.original_filename,
+                    record.mime_type,
+                    record.file_size_bytes,
+                    record.storage_key,
+                    record.created_at,
+                    record.updated_at,
+                    record.status,
+                    record.analyzed_at,
+                    record.archived_at,
+                ),
+            )
+            connection.commit()
+    except Exception as exc:
+        stored_path = STORE_DIR / Path(record.storage_key).relative_to("store")
+        if stored_path.exists():
+            try:
+                os.remove(stored_path)
+            except OSError:
+                pass
+        raise _error(500, "SAVE_FAILED", f"Failed to write metadata: {exc}") from exc
+
+    return get_inspiration_by_id(record.id)
+
+
+async def create_browser_extension_clip(
+    file: UploadFile | None,
+    source_url: str | None,
+    title: str | None,
+    notes: str | None,
+    analysis: dict[str, object],
+) -> InspirationDetailEnvelope:
+    if file is None:
+        raise _error(400, "MISSING_FILE", "Image file is required")
+
+    normalized_source_url = _normalize_source_url(source_url)
+    if normalized_source_url:
+        existing_record = _find_record_by_source_url(normalized_source_url)
+        if existing_record is not None:
+            return get_inspiration_by_id(existing_record.id)
+
+    payload = await file.read()
+    if not payload:
+        raise _error(400, "MISSING_FILE", "Image file is required")
+
+    detected_mime_type = detect_supported_image_mime_type(payload)
+    if detected_mime_type not in ALLOWED_MIME_TYPES:
+        raise _error(400, "INVALID_FILE_TYPE", "Only PNG, JPEG, and WEBP files are supported")
+
+    if len(payload) > MAX_FILE_SIZE_BYTES:
+        raise _error(413, "FILE_TOO_LARGE", f"File exceeds {MAX_FILE_SIZE_BYTES} bytes")
+
+    tags_en = _normalize_string_list(analysis.get("tags_en"))
+    tags_zh = _normalize_string_list(analysis.get("tags_zh"))
+    colors = _normalize_string_list(analysis.get("colors"))
+    summary = _normalize_optional_text(
+        str(analysis.get("summary") or analysis.get("summary_en") or analysis.get("summary_zh") or "")
+    )
+    created_at = utc_now()
+    updated_at = created_at
+    content_hash = hashlib.sha256(payload).hexdigest()
+    storage_key = f"store/{content_hash[:2]}/{content_hash[2:4]}/{content_hash}-{uuid4().hex[:8]}"
+
+    try:
+        persisted = persist_upload(payload=payload, storage_key=storage_key)
+    except OSError as exc:
+        raise _error(500, "SAVE_FAILED", f"Failed to store file locally: {exc}") from exc
+
+    record = InspirationRecord(
+        id=_build_id(),
+        board_id=_default_board_id(),
+        board_name=None,
+        title=_normalize_optional_text(title) or summary,
+        notes=_normalize_optional_text(notes),
+        source_url=normalized_source_url,
+        analysis_summary=summary,
+        analysis_tags_json=json.dumps(tags_en),
+        analysis_prompt_en=_normalize_optional_text(str(analysis.get("prompt_en") or "")),
+        analysis_prompt_zh=_normalize_optional_text(str(analysis.get("prompt_zh") or "")),
+        analysis_tags_en_json=json.dumps(tags_en),
+        analysis_tags_zh_json=json.dumps(tags_zh),
+        analysis_colors_json=json.dumps(colors),
+        analysis_status="completed",
+        analysis_error=None,
+        status="active",
+        original_filename=Path(file.filename or "upload").name,
+        mime_type=detected_mime_type,
+        file_size_bytes=len(payload),
+        storage_key=persisted,
+        created_at=created_at,
+        updated_at=updated_at,
+        analyzed_at=created_at,
         archived_at=None,
     )
 
