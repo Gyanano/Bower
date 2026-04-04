@@ -1,5 +1,5 @@
-import Link from "next/link";
-import { Icon } from "@/components/icons";
+import { AppShell } from "@/components/layout/app-shell";
+import { Footer } from "@/components/layout/footer";
 import { getAllInspirations, getAppPreferences, getBoards, type InsightsWarningReason } from "@/lib/api";
 import { formatUtcTimestamp } from "@/lib/format";
 import { getDictionary } from "@/lib/i18n";
@@ -23,15 +23,10 @@ export default async function InsightsPage() {
     : { ui_language: "zh-CN" as const, updated_at: null };
   const copy = getDictionary(preferences.ui_language);
   const boards = boardsResult.status === "fulfilled" ? boardsResult.value.data : [];
-  const activeData = activeResult.status === "fulfilled"
-    ? activeResult.value
-    : failedInsightsResult;
-  const archivedData = archivedResult.status === "fulfilled"
-    ? archivedResult.value
-    : failedInsightsResult;
-  const activeItems = activeData.items;
-  const archivedItems = archivedData.items;
-  const allItems = [...activeItems, ...archivedItems];
+  const activeData = activeResult.status === "fulfilled" ? activeResult.value : failedInsightsResult;
+  const archivedData = archivedResult.status === "fulfilled" ? archivedResult.value : failedInsightsResult;
+  const allItems = [...activeData.items, ...archivedData.items];
+  const hasIncompleteInsights = activeData.incomplete || archivedData.incomplete;
   const insightsWarningMessages = [...new Set([...activeData.warningReasons, ...archivedData.warningReasons])].map((reason) => {
     switch (reason) {
       case "request_limit_reached":
@@ -41,7 +36,6 @@ export default async function InsightsPage() {
         return copy.insightsLoadIssueWarning;
     }
   });
-  const hasIncompleteInsights = activeData.incomplete || archivedData.incomplete;
   const analyzedCount = allItems.filter((item) => item.analysis_status === "completed").length;
   const recentAnalysisItems = [...allItems]
     .filter((item) => item.analysis_status === "completed" && item.analyzed_at)
@@ -59,101 +53,106 @@ export default async function InsightsPage() {
   const topTags = [...tagMap.entries()].sort((left, right) => right[1] - left[1]).slice(0, 8);
 
   return (
-    <div className="workspace-screen">
-      <div className="workspace-body">
-        <aside className="workspace-sidebar">
-          <div>
-            <p className="sidebar-label">{copy.libraryLabel}</p>
-            <Link className="sidebar-link" href="/inspirations">
-              <Icon name="layout" width={16} height={16} />
-              <span>{copy.allInspirations}</span>
-            </Link>
-            <Link className="sidebar-link active" href="/insights">
-              <Icon name="sparkles" width={16} height={16} />
-              <span>{copy.insights}</span>
-            </Link>
+    <AppShell copy={copy}>
+      {/* Hero */}
+      <section className="pt-12 lg:pt-20 pb-6 lg:pb-10 text-center px-6">
+        <h1 className="font-headline text-4xl md:text-5xl lg:text-7xl uppercase tracking-[0.15em] text-primary mb-3">
+          {copy.heroStudioTitle}
+        </h1>
+        <p className="font-label text-[10px] lg:text-xs uppercase tracking-[0.5em] text-muted-foreground italic">
+          {copy.heroStudioSubtitle}
+        </p>
+        <div className="flex justify-center mt-6">
+          <div className="w-px h-10 bg-primary/20" />
+        </div>
+      </section>
 
-            <p className="sidebar-label boards">{copy.boardsLabel}</p>
-            {boards.map((board) => (
-              <Link className="sidebar-link" href={`/inspirations?board=${board.id}`} key={board.id}>
-                <span className="sidebar-board-mark" />
-                <span>{board.name}</span>
-              </Link>
-            ))}
+      <div className="px-6 lg:px-12 max-w-6xl mx-auto pb-12">
+        {hasIncompleteInsights && (
+          <div className="mb-6 p-3 rounded-lg border border-destructive/20 bg-destructive/5 text-sm text-destructive/80 leading-relaxed">
+            {copy.insightsIncompleteWarning}
+            {insightsWarningMessages.length ? ` (${insightsWarningMessages.join(" · ")})` : ""}
           </div>
+        )}
 
-          <Link className="sidebar-link" href="/settings?section=ai">
-            <Icon name="settings" width={16} height={16} />
-            <span>{copy.openSettings}</span>
-          </Link>
-        </aside>
+        {/* Metric cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+          <article className="p-6 rounded-lg border border-border bg-card">
+            <span className="font-label text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+              {copy.totalReferences}
+            </span>
+            <strong className="block mt-3 font-headline text-4xl tracking-tight text-primary">
+              {allItems.length}
+            </strong>
+          </article>
+          <article className="p-6 rounded-lg border border-border bg-card">
+            <span className="font-label text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+              {copy.analyzedReferences}
+            </span>
+            <strong className="block mt-3 font-headline text-4xl tracking-tight text-primary">
+              {analyzedCount}
+            </strong>
+          </article>
+        </div>
 
-        <main className="workspace-main workspace-main-full">
-          <div className="insights-page insights-page-shell">
-            <header className="insights-header">
-              <div>
-                <h1>{copy.insightsHeadline}</h1>
-                <p>{copy.insightsDescription}</p>
-              </div>
-            </header>
-
-            {hasIncompleteInsights ? (
-              <p className="insights-warning" role="status">
-                {copy.insightsIncompleteWarning}
-                {insightsWarningMessages.length ? ` (${insightsWarningMessages.join(" · ")})` : ""}
-              </p>
-            ) : null}
-
-            <section className="insights-metrics">
-              <article className="insight-card">
-                <span>{copy.totalReferences}</span>
-                <strong>{allItems.length}</strong>
-              </article>
-              <article className="insight-card">
-                <span>{copy.analyzedReferences}</span>
-                <strong>{analyzedCount}</strong>
-              </article>
-            </section>
-
-            <section className="insights-grid">
-              <article className="insight-card">
-                <h2>{copy.boardDistribution}</h2>
-                <div className="insight-list">
-                  {boards.map((board) => (
-                    <div className="insight-row" key={board.id}>
-                      <span>{board.name}</span>
-                      <strong>{allItems.filter((item) => item.board_id === board.id).length}</strong>
-                    </div>
-                  ))}
+        {/* Detail grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Board distribution */}
+          <article className="p-6 rounded-lg border border-border bg-card space-y-4">
+            <h2 className="font-headline text-lg uppercase tracking-[0.08em] text-primary">
+              {copy.boardDistribution}
+            </h2>
+            <div className="space-y-3">
+              {boards.map((board) => (
+                <div key={board.id} className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">{board.name}</span>
+                  <strong className="text-sm text-primary">
+                    {allItems.filter((item) => item.board_id === board.id).length}
+                  </strong>
                 </div>
-              </article>
+              ))}
+            </div>
+          </article>
 
-              <article className="insight-card">
-                <h2>{copy.topTags}</h2>
-                <div className="insight-tags">
-                  {topTags.map(([tag, count]) => (
-                    <span className="insight-tag" key={tag}>
-                      {tag} · {count}
-                    </span>
-                  ))}
-                </div>
-              </article>
+          {/* Top tags */}
+          <article className="p-6 rounded-lg border border-border bg-card space-y-4">
+            <h2 className="font-headline text-lg uppercase tracking-[0.08em] text-primary">
+              {copy.topTags}
+            </h2>
+            <div className="flex flex-wrap gap-2">
+              {topTags.map(([tag, count]) => (
+                <span
+                  key={tag}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface text-sm text-muted-foreground"
+                >
+                  {tag} <span className="text-primary/50">·</span> {count}
+                </span>
+              ))}
+            </div>
+          </article>
 
-              <article className="insight-card">
-                <h2>{copy.recentAnalysis}</h2>
-                <div className="insight-list">
-                  {recentAnalysisItems.map((item) => (
-                    <div className="insight-row" key={item.id}>
-                      <span>{item.title || item.original_filename}</span>
-                      <strong>{item.analyzed_at ? formatUtcTimestamp(item.analyzed_at, preferences.ui_language) : copy.analyzeReady}</strong>
-                    </div>
-                  ))}
+          {/* Recent analysis */}
+          <article className="p-6 rounded-lg border border-border bg-card space-y-4">
+            <h2 className="font-headline text-lg uppercase tracking-[0.08em] text-primary">
+              {copy.recentAnalysis}
+            </h2>
+            <div className="space-y-3">
+              {recentAnalysisItems.map((item) => (
+                <div key={item.id} className="flex justify-between items-center gap-2">
+                  <span className="text-sm text-muted-foreground truncate">
+                    {item.title || item.original_filename}
+                  </span>
+                  <strong className="text-xs text-primary/60 whitespace-nowrap">
+                    {item.analyzed_at ? formatUtcTimestamp(item.analyzed_at, preferences.ui_language) : copy.analyzeReady}
+                  </strong>
                 </div>
-              </article>
-            </section>
-          </div>
-        </main>
+              ))}
+            </div>
+          </article>
+        </div>
       </div>
-    </div>
+
+      <Footer copy={copy} />
+    </AppShell>
   );
 }
