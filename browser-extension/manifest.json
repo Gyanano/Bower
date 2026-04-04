@@ -5,16 +5,15 @@
   "description": "Analyze any web image with the Bower AI service.",
   "permissions": ["contextMenus", "storage", "scripting"],
   "host_permissions": [
-    "<all_urls>",
-    "http://127.0.0.1:8000/*",
-    "http://localhost:8000/*"
+    "http://*/*",
+    "https://*/*"
   ],
   "background": {
     "service_worker": "background.js"
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
+      "matches": ["http://*/*", "https://*/*"],
       "js": ["content.js"],
       "run_at": "document_idle"
     }

@@ -41,7 +41,10 @@ const setupSteps = [
 ];
 
 const resetColor = "\x1b[0m";
+const CHILD_KILL_GRACE_MS = 1500;
+const EXIT_FALLBACK_MS = 250;
 let shuttingDown = false;
+let shutdownCode = 0;
 const children = [];
 
 function logLine(processName, color, line) {
@@ -77,19 +80,34 @@ function terminateChild(child) {
   }
 }
 
+function hasExited(child) {
+  return child.exitCode !== null || child.signalCode !== null;
+}
+
+function maybeExit() {
+  if (!shuttingDown) {
+    return;
+  }
+
+  if (children.every(hasExited)) {
+    process.exit(shutdownCode);
+  }
+}
+
 function shutdown(code = 0) {
   if (shuttingDown) {
     return;
   }
 
   shuttingDown = true;
+  shutdownCode = code;
   for (const child of children) {
     terminateChild(child);
   }
 
   setTimeout(() => {
     for (const child of children) {
-      if (!child.killed) {
+      if (!hasExited(child)) {
         try {
           process.kill(-child.pid, "SIGKILL");
         } catch (_error) {
@@ -101,11 +119,13 @@ function shutdown(code = 0) {
         }
       }
     }
-  }, 1500).unref();
+  }, CHILD_KILL_GRACE_MS);
 
   setTimeout(() => {
-    process.exit(code);
-  }, 50).unref();
+    process.exit(shutdownCode);
+  }, CHILD_KILL_GRACE_MS + EXIT_FALLBACK_MS);
+
+  maybeExit();
 }
 
 function runCommand(definition, options = {}) {
@@ -213,6 +233,7 @@ async function main() {
 
     child.on("exit", (code, signal) => {
       if (shuttingDown) {
+        maybeExit();
         return;
       }
 
