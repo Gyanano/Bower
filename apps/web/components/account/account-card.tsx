@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 import {
   AUTH_STATE_EVENT,
@@ -16,7 +17,13 @@ import type { CopyDictionary } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-export function AccountCard({ copy }: { copy: CopyDictionary }) {
+export function AccountCard({
+  copy,
+  authMode = "full",
+}: {
+  copy: CopyDictionary;
+  authMode?: "full" | "manageOnly";
+}) {
   const [accountStatus, setAccountStatus] = useState<AccountStatus | null>(null);
   const [mode, setMode] = useState<"register" | "login">("register");
   const [displayName, setDisplayName] = useState("");
@@ -229,6 +236,21 @@ export function AccountCard({ copy }: { copy: CopyDictionary }) {
             </Button>
           </div>
         </form>
+      </section>
+    );
+  }
+
+  if (authMode === "manageOnly") {
+    return (
+      <section className="space-y-5 rounded-[1.5rem] border border-border bg-card p-5 shadow-card lg:p-6">
+        <div className="space-y-1">
+          <h2 className="font-headline text-2xl text-primary">{copy.accountLabel}</h2>
+          <p className="text-sm leading-relaxed text-muted-foreground">{copy.accountGuestHint}</p>
+        </div>
+
+        <Button asChild className="bg-primary text-primary-foreground">
+          <Link href="/login">{copy.signIn}</Link>
+        </Button>
       </section>
     );
   }

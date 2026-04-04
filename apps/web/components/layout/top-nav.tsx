@@ -2,32 +2,26 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Search, Camera, LogIn, Settings2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Menu, Search, Camera, LogIn, Settings2 } from "lucide-react";
 import { AUTH_STATE_EVENT, getAccountStatus, type AccountStatus } from "@/lib/api";
 import type { CopyDictionary } from "@/lib/i18n";
-
-const navItems = [
-  { labelKey: "navArchive" as const, href: "/inspirations", matchPath: "/inspirations", matchView: undefined },
-  { labelKey: "navCollections" as const, href: "/inspirations?view=collections", matchPath: "/inspirations", matchView: "collections" },
-  { labelKey: "navTimeline" as const, href: "/inspirations?view=timeline", matchPath: "/inspirations", matchView: "timeline" },
-  { labelKey: "navStudio" as const, href: "/insights", matchPath: "/insights", matchView: undefined },
-];
 
 export function TopNav({
   copy,
   onSearchClick,
   onUploadClick,
+  isSidebarOpen,
+  onSidebarToggle,
 }: {
   copy: CopyDictionary;
   onSearchClick?: () => void;
   onUploadClick?: () => void;
+  isSidebarOpen: boolean;
+  onSidebarToggle: () => void;
 }) {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const currentView = searchParams.get("view") ?? undefined;
   const [accountStatus, setAccountStatus] = useState<AccountStatus | null>(null);
 
   useEffect(() => {
@@ -54,46 +48,34 @@ export function TopNav({
     };
   }, []);
 
-  function isActive(item: typeof navItems[number]) {
-    if (item.matchView) {
-      return pathname === item.matchPath && currentView === item.matchView;
-    }
-    if (item.matchPath === "/inspirations") {
-      return pathname === "/inspirations" && !currentView;
-    }
-    return pathname.startsWith(item.matchPath);
-  }
-
   return (
-    <nav className="fixed top-0 w-full z-50 flex justify-between items-center px-6 lg:px-12 py-4 lg:py-5 bg-background/70 backdrop-blur-xl border-b border-border">
-      <Link href="/inspirations" className="flex items-center gap-3">
-        <Image
-          src="/BowerLogo.png"
-          alt="Bower"
-          width={28}
-          height={28}
-          className="rounded-full"
-        />
-        <span className="font-headline text-xl lg:text-2xl uppercase tracking-[0.2em] text-primary">
-          BOWER
-        </span>
-      </Link>
-
-      <div className="hidden md:flex gap-8 lg:gap-12">
-        {navItems.map((item) => (
-          <Link
-            key={item.labelKey}
-            href={item.href}
-            className={cn(
-              "font-label text-[10px] uppercase tracking-[0.4em] transition-colors",
-              isActive(item)
-                ? "text-primary font-bold border-b-2 border-primary pb-0.5"
-                : "text-primary/50 hover:text-primary/80"
-            )}
-          >
-            {copy[item.labelKey]}
-          </Link>
-        ))}
+    <nav className="sticky top-0 z-40 flex h-[60px] items-center justify-between border-b border-border bg-background/88 px-4 backdrop-blur-xl lg:h-[72px] lg:px-8">
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={onSidebarToggle}
+          className="hidden text-primary/70 transition-colors hover:text-primary lg:inline-flex"
+          aria-label={isSidebarOpen ? "Hide sidebar" : "Show sidebar"}
+        >
+          <Menu size={18} strokeWidth={1.6} />
+        </button>
+        <Link href="/inspirations" className="flex items-center gap-3 lg:hidden">
+          <Image
+            src="/BowerLogo.png"
+            alt="Bower"
+            width={28}
+            height={28}
+            className="rounded-full"
+          />
+          <div className="min-w-0">
+            <span className="font-headline text-lg uppercase tracking-[0.2em] text-primary lg:text-xl">
+              Bower
+            </span>
+            <p className="font-label text-[9px] uppercase tracking-[0.28em] text-primary/40">
+              {pathname.startsWith("/settings") ? copy.settings : copy.footerBrand}
+            </p>
+          </div>
+        </Link>
       </div>
 
       <div className="flex items-center gap-2 sm:gap-3">
@@ -127,7 +109,7 @@ export function TopNav({
         )}
         <Link
           href="/settings"
-          className="text-primary/60 hover:text-primary transition-colors"
+          className="text-primary/60 transition-colors hover:text-primary lg:hidden"
           aria-label={copy.settings}
         >
           <Settings2 size={18} strokeWidth={1.5} />
@@ -135,10 +117,10 @@ export function TopNav({
         <Link
           href="/login"
           aria-label={accountStatus?.profile?.display_name ?? copy.signIn}
-          className="inline-flex items-center gap-2 rounded-full border border-border px-3 py-1.5 text-[10px] uppercase tracking-[0.28em] text-primary/70 transition-colors hover:text-primary"
+          className="inline-flex min-h-10 items-center gap-2 rounded-full border border-border px-4.5 py-2 text-[13px] uppercase tracking-[0.14em] text-primary/70 transition-colors hover:text-primary"
         >
-          <LogIn size={15} strokeWidth={1.5} className="sm:hidden" />
-          <span className="hidden sm:block max-w-[10rem] truncate">
+          <LogIn size={14} strokeWidth={1.6} className="shrink-0" />
+          <span className="hidden max-w-[10rem] truncate font-label text-[14px] leading-none tracking-[0.1em] sm:block">
             {accountStatus?.profile?.display_name ?? copy.signIn}
           </span>
         </Link>

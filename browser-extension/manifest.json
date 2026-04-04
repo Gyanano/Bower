@@ -18,9 +18,21 @@
       "run_at": "document_idle"
     }
   ],
+  "icons": {
+    "16": "BowerLogo.png",
+    "32": "BowerLogo.png",
+    "48": "BowerLogo.png",
+    "128": "BowerLogo.png"
+  },
   "action": {
     "default_title": "Bower Image Analyzer",
-    "default_popup": "popup.html"
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "BowerLogo.png",
+      "32": "BowerLogo.png",
+      "48": "BowerLogo.png",
+      "128": "BowerLogo.png"
+    }
   },
   "options_ui": {
     "page": "popup.html",

@@ -7,6 +7,10 @@ export interface Board {
   slug: string;
 }
 
+export interface BoardCreatePayload {
+  name: string;
+}
+
 export interface InspirationListItem {
   id: string;
   board_id: string | null;
@@ -213,6 +217,14 @@ export async function getInspirations(params?: {
   return apiFetch<{ data: InspirationListItem[]; meta: { limit: number; offset: number; total: number } }>(
     `/inspirations?${searchParams.toString()}`,
   );
+}
+
+export async function createBoard(payload: BoardCreatePayload) {
+  return apiFetch<{ data: Board }>("/boards", {
+    body: JSON.stringify(payload),
+    headers: { "content-type": "application/json" },
+    method: "POST",
+  });
 }
 
 export async function getAllInspirations(status: "active" | "archived", pageSize = 100): Promise<AllInspirationsResult> {
