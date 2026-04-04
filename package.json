@@ -1,0 +1,17 @@
+{
+  "name": "bower",
+  "private": true,
+  "packageManager": "pnpm@10.17.1",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:server": "uv run --directory apps/server uvicorn app.main:app --reload",
+    "sync:server": "uv sync --directory apps/server",
+    "test:server": "uv run --directory apps/server pytest",
+    "install:web": "npm install --prefix apps/web",
+    "dev:web": "npm --prefix apps/web run dev",
+    "build:web": "npm --prefix apps/web run build"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.4"
+  }
+}

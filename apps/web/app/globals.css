@@ -1,0 +1,120 @@
+@import "tailwindcss";
+
+@theme {
+  /* ── Color Palette ── */
+  --color-background: #f8f5ef;
+  --color-foreground: #1a1c1b;
+  --color-primary: #002b6b;
+  --color-primary-foreground: #ffffff;
+  --color-primary-light: #002b6b0f;
+  --color-accent: #1a428a;
+  --color-accent-foreground: #ffffff;
+  --color-muted: #f0ece5;
+  --color-muted-foreground: #78726d;
+  --color-card: #ffffff;
+  --color-card-foreground: #1a1c1b;
+  --color-border: #002b6b1a;
+  --color-input: #e2ddd6;
+  --color-ring: #002b6b33;
+  --color-destructive: #ba1a1a;
+  --color-destructive-foreground: #ffffff;
+  --color-success: #0a9f63;
+  --color-surface: #f5f2ec;
+  --color-surface-high: #ebe5dc;
+  --color-outline: #7d7872;
+  --color-outline-variant: #d2cbc1;
+
+  /* ── Typography ── */
+  --font-headline: var(--font-headline-latin), var(--font-headline-cjk), "Songti SC", "STSong", serif;
+  --font-label: "Space Grotesk", "Arial", sans-serif;
+  --font-body: var(--font-body-latin), var(--font-body-cjk), "PingFang SC", "Hiragino Sans GB", "Helvetica Neue", sans-serif;
+
+  /* ── Radius ── */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1.5rem;
+  --radius-full: 9999px;
+
+  /* ── Shadows ── */
+  --shadow-card: 0 10px 24px rgba(0, 0, 0, 0.06);
+  --shadow-elevated: 0 25px 60px rgba(0, 0, 0, 0.12);
+  --shadow-hover: 0 40px 60px -15px rgba(0, 43, 107, 0.1);
+
+  /* ── Animations ── */
+  --animate-fade-in: fade-in 0.4s ease-out;
+  --animate-slide-up: slide-up 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-shimmer: shimmer 1.2s linear infinite;
+  --animate-spin: spin 1s linear infinite;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ── Base Layer ── */
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    border-color: var(--color-border);
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overscroll-behavior-y: none;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-body);
+    overscroll-behavior-y: none;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  img {
+    display: block;
+    max-width: 100%;
+  }
+}
+
+/* ── Utility Classes ── */
+@layer utilities {
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+}

@@ -1,1 +1,17 @@
 .DS_Store
+
+node_modules/
+/apps/web/package-lock.json
+.next/
+dist/
+.turbo/
+*.pyc
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+data/
+/test.png
+/apps/web/tsconfig.tsbuildinfo

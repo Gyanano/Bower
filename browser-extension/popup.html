@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bower Extension Settings</title>
+    <link rel="icon" type="image/png" href="BowerLogo.png" />
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f7f2eb;
+        --ink: #1f1c18;
+        --muted: #71675f;
+        --line: rgba(84, 63, 44, 0.12);
+        --accent: #c7772f;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-width: 360px;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: "SF Pro Text", "PingFang SC", "Noto Sans SC", sans-serif;
+      }
+
+      .shell {
+        padding: 18px 18px 16px;
+      }
+
+      .hero {
+        padding: 0 0 12px;
+      }
+
+      .eyebrow {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: rgba(31, 28, 24, 0.54);
+      }
+
+      h1 {
+        margin: 10px 0 0;
+        font-size: 24px;
+        line-height: 1.1;
+      }
+
+      .subhead {
+        margin: 10px 0 0;
+        font-size: 14px;
+        line-height: 1.6;
+        color: var(--muted);
+      }
+
+      .content {
+        display: grid;
+        gap: 14px;
+        padding: 0;
+      }
+
+      .card {
+        padding: 16px 0 0;
+        border-top: 1px solid var(--line);
+      }
+
+      .label {
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: rgba(31, 28, 24, 0.48);
+      }
+
+      .description {
+        margin-top: 10px;
+        font-size: 13px;
+        line-height: 1.65;
+        color: var(--muted);
+      }
+
+      .option-list {
+        display: grid;
+        gap: 10px;
+        margin-top: 14px;
+      }
+
+      .option {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 2px;
+        border: 1px solid rgba(84, 63, 44, 0.08);
+        border-left: 0;
+        border-right: 0;
+        background: transparent;
+        cursor: pointer;
+        transition: border-color 160ms ease, transform 160ms ease;
+      }
+
+      .option:hover {
+        transform: translateX(1px);
+        border-color: rgba(199, 119, 47, 0.28);
+      }
+
+      .option input {
+        margin: 0;
+        accent-color: var(--accent);
+      }
+
+      .option-copy {
+        flex: 1;
+      }
+
+      .option-title {
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .option-description {
+        margin-top: 3px;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--muted);
+      }
+
+      .status {
+        margin-top: 14px;
+        min-height: 20px;
+        font-size: 12px;
+        line-height: 1.5;
+        color: rgba(31, 28, 24, 0.58);
+      }
+
+      .status.is-saved {
+        color: #2e7b4f;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <div class="eyebrow" id="eyebrow">Bower Extension</div>
+        <h1 id="title">Settings</h1>
+        <p class="subhead" id="subhead"></p>
+      </section>
+      <section class="content">
+        <article class="card">
+          <div class="label" id="language-label">System Language</div>
+          <div class="description" id="language-description"></div>
+          <div class="option-list">
+            <label class="option">
+              <input type="radio" name="ui-language" value="auto" />
+              <div class="option-copy">
+                <div class="option-title" id="option-auto-title"></div>
+                <div class="option-description" id="option-auto-description"></div>
+              </div>
+            </label>
+            <label class="option">
+              <input type="radio" name="ui-language" value="zh" />
+              <div class="option-copy">
+                <div class="option-title" id="option-zh-title"></div>
+                <div class="option-description" id="option-zh-description"></div>
+              </div>
+            </label>
+            <label class="option">
+              <input type="radio" name="ui-language" value="en" />
+              <div class="option-copy">
+                <div class="option-title" id="option-en-title"></div>
+                <div class="option-description" id="option-en-description"></div>
+              </div>
+            </label>
+          </div>
+          <div class="status" id="status"></div>
+        </article>
+      </section>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

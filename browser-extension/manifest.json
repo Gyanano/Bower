@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "Bower Image Analyzer",
+  "version": "0.1.0",
+  "description": "Analyze any web image with the Bower AI service.",
+  "permissions": ["contextMenus", "storage", "scripting"],
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "BowerLogo.png",
+    "32": "BowerLogo.png",
+    "48": "BowerLogo.png",
+    "128": "BowerLogo.png"
+  },
+  "action": {
+    "default_title": "Bower Image Analyzer",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "BowerLogo.png",
+      "32": "BowerLogo.png",
+      "48": "BowerLogo.png",
+      "128": "BowerLogo.png"
+    }
+  },
+  "options_ui": {
+    "page": "popup.html",
+    "open_in_tab": false
+  }
+}
