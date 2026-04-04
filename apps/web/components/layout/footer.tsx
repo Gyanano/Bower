@@ -3,22 +3,25 @@ import type { CopyDictionary } from "@/lib/i18n";
 
 export function Footer({ copy }: { copy: CopyDictionary }) {
   return (
-    <footer className="w-full flex flex-col items-center gap-6 px-6 lg:px-12 py-16 lg:py-24 max-w-5xl mx-auto border-t border-border">
-      <div className="flex flex-col items-center gap-3">
+    <footer className="w-full px-6 py-14 lg:px-12 lg:py-16">
+      <div className="flex items-center justify-between gap-6 border-t border-border pt-8">
+        <div className="min-w-0">
+          <p className="font-headline text-base leading-relaxed text-primary lg:text-lg">
+            {copy.footerBrand} &copy; 2026
+          </p>
+          <p className="mt-1 font-body text-sm leading-relaxed text-muted-foreground lg:text-base">
+            {copy.footerTagline}
+          </p>
+        </div>
+
         <Image
           src="/BowerLogo.png"
           alt="Bower"
-          width={48}
-          height={48}
-          className="rounded-full opacity-40"
+          width={64}
+          height={64}
+          className="mr-6 shrink-0 rounded-full opacity-60 lg:mr-8"
         />
-        <p className="font-headline italic text-primary text-lg lg:text-xl">
-          {copy.footerBrand} &copy; 2026
-        </p>
       </div>
-      <p className="font-label text-[9px] uppercase tracking-[0.3em] text-muted-foreground">
-        {copy.footerTagline}
-      </p>
     </footer>
   );
 }

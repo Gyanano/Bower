@@ -35,19 +35,13 @@ export function TimelineCard({
           className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
         />
 
-        {/* Hover overlay */}
         {tags.length > 0 && (
-          <div className="absolute bottom-4 left-4 right-4 p-3 rounded-xl bg-background/60 backdrop-blur-md border border-border translate-y-3 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-500">
-            <div className="flex items-center justify-between mb-2">
-              <span className="font-label text-[9px] uppercase tracking-[0.2em] text-primary font-bold">
-                {tags[0]}
-              </span>
-            </div>
+          <div className="pointer-events-none absolute inset-x-3 bottom-3 translate-y-3 rounded-[1.1rem] border border-white/35 bg-white/18 p-3 opacity-0 shadow-[0_18px_45px_rgba(15,23,42,0.12)] backdrop-blur-xl transition-all duration-500 group-hover:translate-y-0 group-hover:opacity-100">
             <div className="flex gap-1.5 flex-wrap">
-              {tags.slice(0, 3).map((tag) => (
+              {tags.map((tag) => (
                 <span
                   key={tag}
-                  className="px-2 py-0.5 bg-surface-high rounded-full font-label text-[8px] uppercase tracking-widest text-primary/70"
+                  className="rounded-full border border-white/30 px-2.5 py-1 font-label text-[8px] uppercase tracking-[0.18em] text-primary/80"
                 >
                   #{tag}
                 </span>

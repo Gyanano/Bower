@@ -1,13 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { User, Cpu, Languages, ArrowLeft } from "lucide-react";
+import { Cpu, Languages } from "lucide-react";
 import { AccountCard } from "@/components/account/account-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import {
   getApiErrorMessage,
@@ -43,8 +41,13 @@ export function SettingsClient({
   const [provider, setProvider] = useState<AIProvider>(initialProvider);
   const [modelId, setModelId] = useState(settings.model_id ?? providerDetails[initialProvider].modelPlaceholder);
   const [apiKey, setApiKey] = useState("");
+  const [isApiKeyDirty, setIsApiKeyDirty] = useState(false);
   const [clearApiKey, setClearApiKey] = useState(false);
-  const [uiLanguage, setUiLanguage] = useState<UILanguage>(preferences.ui_language);
+  const [uiLanguage] = useState<UILanguage>("zh-CN");
+  const [storedProvider, setStoredProvider] = useState<AIProvider | null>(settings.provider);
+  const [hasStoredKey, setHasStoredKey] = useState(settings.has_api_key);
+  const [storedKeyMask, setStoredKeyMask] = useState(settings.api_key_mask ?? "");
+  const [keyUpdatedAt, setKeyUpdatedAt] = useState(settings.updated_at);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -56,17 +59,22 @@ export function SettingsClient({
   }
 
   async function persistSettings() {
-    await Promise.all([
+    const [aiSettingsResult] = await Promise.all([
       updateAiSettings({
         provider,
         model_id: modelId.trim() || null,
         ...(clearApiKey ? { clear_api_key: true as const } : {}),
-        ...(!clearApiKey && apiKey.trim() ? { api_key: apiKey.trim() } : {}),
+        ...(!clearApiKey && isApiKeyDirty && apiKey.trim() ? { api_key: apiKey.trim() } : {}),
       }),
       updateAppPreferences({ ui_language: uiLanguage }),
     ]);
     setApiKey("");
+    setIsApiKeyDirty(false);
     setClearApiKey(false);
+    setStoredProvider(aiSettingsResult.data.provider);
+    setHasStoredKey(aiSettingsResult.data.has_api_key);
+    setStoredKeyMask(aiSettingsResult.data.api_key_mask ?? "");
+    setKeyUpdatedAt(aiSettingsResult.data.updated_at);
     setFeedback(copy.actionSaved);
     router.refresh();
   }
@@ -125,88 +133,102 @@ export function SettingsClient({
     }
   }
 
+  function handleApiKeyFocus() {
+    if (!clearApiKey && hasVisibleStoredKey && !isApiKeyDirty) {
+      setApiKey("");
+      setIsApiKeyDirty(true);
+    }
+  }
+
+  function handleApiKeyBlur() {
+    if (!clearApiKey && hasVisibleStoredKey && isApiKeyDirty && !apiKey.trim()) {
+      setApiKey("");
+      setIsApiKeyDirty(false);
+    }
+  }
+
+  const hasVisibleStoredKey = hasStoredKey && storedProvider === provider;
+  const displayedApiKeyValue =
+    clearApiKey
+      ? ""
+      : isApiKeyDirty
+        ? apiKey
+        : hasVisibleStoredKey
+          ? storedKeyMask
+          : "";
+
   return (
-    <div className="mx-auto w-full max-w-5xl px-6 pb-10">
-        {/* Desktop layout */}
-        <div className="hidden min-h-[36rem] md:grid grid-cols-[200px_1fr] gap-8">
-          {/* Sidebar */}
-          <aside className="space-y-1 pt-2">
-            <p className="font-headline text-lg uppercase tracking-[0.1em] text-primary mb-4">
-              {copy.settings}
-            </p>
-            <div className="flex items-center gap-2.5 px-3 py-2 rounded-md text-muted-foreground">
-              <User size={15} /> <span className="text-sm">{copy.accountLabel}</span>
-            </div>
-            <div className="flex items-center gap-2.5 px-3 py-2 rounded-md bg-primary-light text-primary font-medium">
-              <Cpu size={15} /> <span className="text-sm">{copy.aiProvider}</span>
-            </div>
-            <div className="flex items-center gap-2.5 px-3 py-2 rounded-md text-muted-foreground">
-              <Languages size={15} /> <span className="text-sm">{copy.uiLanguage}</span>
-            </div>
-            <Separator className="my-3" />
-            <Link
-              href="/inspirations"
-              className="flex items-center gap-2.5 px-3 py-2 rounded-md text-muted-foreground hover:text-primary transition-colors"
-            >
-              <ArrowLeft size={15} /> <span className="text-sm">{copy.backToWorkspace}</span>
-            </Link>
-          </aside>
+    <div className="mx-auto w-full max-w-4xl px-6 pb-10">
+      <div className="space-y-8">
+        <AccountCard copy={copy} authMode="manageOnly" />
 
-          {/* Content */}
-          <main className="space-y-8">
-            <AccountCard copy={copy} />
-
-            <div>
+        <section className="rounded-[1.5rem] border border-border bg-card p-5 shadow-card lg:p-7">
+          <div className="mb-6 flex items-start gap-3">
+            <div className="mt-1 rounded-full bg-primary-light p-2 text-primary">
+              <Cpu size={18} strokeWidth={1.6} />
+            </div>
+            <div className="space-y-1">
               <h2 className="font-headline text-2xl text-primary">{copy.providerSectionTitle}</h2>
-              <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">
+              <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
                 {copy.providerSectionDescription}
               </p>
             </div>
+          </div>
 
-            <form className="space-y-5 max-w-lg" onSubmit={handleSave}>
-              <div className="space-y-1.5">
-                <label className="font-label text-[10px] uppercase tracking-[0.3em] text-foreground font-semibold">
+          <form className="space-y-6" onSubmit={handleSave}>
+            <div className="grid gap-5 md:grid-cols-2">
+              <label className="space-y-1.5">
+                <span className="font-label text-[10px] font-semibold uppercase tracking-[0.3em] text-foreground">
                   {copy.aiProvider}
-                </label>
+                </span>
                 <select
                   onChange={(e) => handleProviderChange(e.target.value as AIProvider)}
                   value={provider}
-                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm"
                 >
-                  {Object.entries(providerDetails).map(([id, d]) => (
-                    <option key={id} value={id}>{d.label}</option>
+                  {Object.entries(providerDetails).map(([id, detail]) => (
+                    <option key={id} value={id}>{detail.label}</option>
                   ))}
                 </select>
-              </div>
+              </label>
 
-              <div className="space-y-1.5">
-                <label className="font-label text-[10px] uppercase tracking-[0.3em] text-foreground font-semibold">
+              <label className="space-y-1.5">
+                <span className="font-label text-[10px] font-semibold uppercase tracking-[0.3em] text-foreground">
                   {copy.aiModel}
-                </label>
+                </span>
                 <Input
                   onChange={(e) => setModelId(e.target.value)}
                   placeholder={providerDetails[provider].modelPlaceholder}
                   value={modelId}
                 />
-              </div>
+              </label>
+            </div>
 
-              <div className="space-y-1.5">
-                <label className="font-label text-[10px] uppercase tracking-[0.3em] text-foreground font-semibold">
+            <div className="space-y-3 rounded-[1.25rem] border border-border bg-surface/60 p-4">
+              <label className="space-y-1.5">
+                <span className="font-label text-[10px] font-semibold uppercase tracking-[0.3em] text-foreground">
                   {copy.apiKey}
-                </label>
+                </span>
                 <Input
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder={settings.has_api_key ? copy.keepCurrentKeyPlaceholder : "sk-..."}
+                  onBlur={handleApiKeyBlur}
+                  onChange={(e) => {
+                    setApiKey(e.target.value);
+                    setIsApiKeyDirty(true);
+                  }}
+                  onFocus={handleApiKeyFocus}
+                  placeholder={hasVisibleStoredKey ? undefined : "sk-..."}
                   type="password"
-                  value={apiKey}
+                  value={displayedApiKeyValue}
                 />
-                <p className="text-xs text-muted-foreground">
-                  {copy.currentKey}: {settings.api_key_mask ?? copy.noneLabel}
-                  {settings.updated_at ? ` · ${formatUtcTimestamp(settings.updated_at, uiLanguage)}` : ""}
-                </p>
-              </div>
+              </label>
 
-              <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
+              {hasVisibleStoredKey && keyUpdatedAt ? (
+                <p className="text-xs text-muted-foreground">
+                  {copy.updatedAtLabel} {formatUtcTimestamp(keyUpdatedAt, uiLanguage)}
+                </p>
+              ) : null}
+
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
                 <input
                   checked={clearApiKey}
                   onChange={(e) => setClearApiKey(e.target.checked)}
@@ -215,134 +237,70 @@ export function SettingsClient({
                 />
                 {copy.clearApiKey}
               </label>
-
-              <Separator />
-
-              {/* Language */}
-              <div className="flex items-center justify-between p-4 rounded-lg bg-surface">
-                <div>
-                  <h2 className="font-headline text-base uppercase tracking-[0.08em] text-primary">
-                    {copy.uiLanguage}
-                  </h2>
-                  <p className="text-xs text-muted-foreground mt-0.5">{copy.languageDescription}</p>
-                </div>
-                <div className="flex rounded-md bg-background border border-border p-0.5">
-                  <button
-                    type="button"
-                    onClick={() => setUiLanguage("zh-CN")}
-                    className={cn(
-                      "px-3 py-1.5 rounded text-sm transition-colors",
-                      uiLanguage === "zh-CN" ? "bg-primary text-primary-foreground" : "text-muted-foreground"
-                    )}
-                  >
-                    简体中文
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setUiLanguage("en")}
-                    className={cn(
-                      "px-3 py-1.5 rounded text-sm transition-colors",
-                      uiLanguage === "en" ? "bg-primary text-primary-foreground" : "text-muted-foreground"
-                    )}
-                  >
-                    English
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex gap-3 pt-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={isTesting || isSaving}
-                  onClick={() => void handleTest()}
-                >
-                  {isTesting ? copy.testing : copy.testConnection}
-                </Button>
-                <Button type="submit" disabled={isSaving || isTesting} className="bg-primary text-primary-foreground">
-                  {isSaving ? copy.saving : copy.saveSettings}
-                </Button>
-              </div>
-            </form>
-
-            {feedback && <p className="text-sm text-success">{feedback}</p>}
-            {error && <p className="text-sm text-destructive">{error}</p>}
-          </main>
-        </div>
-
-        {/* Mobile layout */}
-        <div className="md:hidden space-y-6">
-          <AccountCard copy={copy} />
-
-          <div className="space-y-4">
-            <div className="space-y-3 p-4 rounded-lg bg-card border border-border">
-              <label className="block space-y-1.5">
-                <span className="font-label text-[10px] uppercase tracking-[0.3em] font-semibold">{copy.aiProvider}</span>
-                <select
-                  onChange={(e) => handleProviderChange(e.target.value as AIProvider)}
-                  value={provider}
-                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
-                >
-                  {Object.entries(providerDetails).map(([id, d]) => (
-                    <option key={id} value={id}>{d.label}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="block space-y-1.5">
-                <span className="font-label text-[10px] uppercase tracking-[0.3em] font-semibold">{copy.aiModel}</span>
-                <Input onChange={(e) => setModelId(e.target.value)} value={modelId} />
-              </label>
             </div>
 
-            <div className="space-y-3 p-4 rounded-lg bg-card border border-border">
-              <label className="block space-y-1.5">
-                <span className="font-label text-[10px] uppercase tracking-[0.3em] font-semibold">{copy.apiKey}</span>
-                <Input
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder={settings.has_api_key ? copy.keepCurrentKeyPlaceholder : "sk-..."}
-                  type="password"
-                  value={apiKey}
-                />
-              </label>
-              <p className="text-xs text-muted-foreground">{copy.storedLocally}</p>
-            </div>
-
-            <div className="space-y-3 p-4 rounded-lg bg-card border border-border">
-              <label className="block space-y-1.5">
-                <span className="font-label text-[10px] uppercase tracking-[0.3em] font-semibold">{copy.uiLanguage}</span>
-                <select
-                  onChange={(e) => setUiLanguage(e.target.value as UILanguage)}
-                  value={uiLanguage}
-                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
-                >
-                  <option value="zh-CN">简体中文</option>
-                  <option value="en">English</option>
-                </select>
-              </label>
-            </div>
-
-            <div className="space-y-3">
+            <div className="flex flex-col gap-3 sm:flex-row">
               <Button
+                type="button"
                 variant="outline"
-                className="w-full"
                 disabled={isTesting || isSaving}
                 onClick={() => void handleTest()}
               >
                 {isTesting ? copy.testing : copy.testConnection}
               </Button>
+              <Button type="submit" disabled={isSaving || isTesting} className="bg-primary text-primary-foreground">
+                {isSaving ? copy.saving : copy.saveSettings}
+              </Button>
               <Button
-                className="w-full bg-primary text-primary-foreground"
+                type="button"
+                variant="outline"
                 disabled={isSaving || isTesting}
                 onClick={() => void handleTestAndSave()}
               >
-                {isSaving ? copy.saving : copy.saveAndTest}
+                {isSaving || isTesting ? copy.testing : copy.saveAndTest}
               </Button>
             </div>
+          </form>
+        </section>
 
-            {feedback && <p className="text-sm text-success">{feedback}</p>}
-            {error && <p className="text-sm text-destructive">{error}</p>}
+        <section className="rounded-[1.5rem] border border-border bg-card p-5 shadow-card lg:p-7">
+          <div className="mb-6 flex items-start gap-3">
+            <div className="mt-1 rounded-full bg-primary-light p-2 text-primary">
+              <Languages size={18} strokeWidth={1.6} />
+            </div>
+            <div className="space-y-1">
+              <h2 className="font-headline text-2xl text-primary">{copy.uiLanguage}</h2>
+              <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+                {copy.languageDescription}
+              </p>
+            </div>
           </div>
-        </div>
+
+          <div className="inline-flex rounded-full border border-border bg-background p-1">
+            <button
+              type="button"
+              className={cn(
+                "rounded-full px-4 py-2 text-sm transition-colors",
+                uiLanguage === "zh-CN" ? "bg-primary text-primary-foreground" : "text-muted-foreground",
+              )}
+            >
+              简体中文
+            </button>
+            <button
+              type="button"
+              disabled
+              className={cn(
+                "cursor-not-allowed rounded-full px-4 py-2 text-sm transition-colors text-muted-foreground/70",
+              )}
+            >
+              English (coming soon)
+            </button>
+          </div>
+        </section>
+
+        {feedback ? <p className="text-sm text-success">{feedback}</p> : null}
+        {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      </div>
     </div>
   );
 }

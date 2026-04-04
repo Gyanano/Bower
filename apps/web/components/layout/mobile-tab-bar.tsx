@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Archive, LayoutGrid, CalendarDays, BarChart3 } from "lucide-react";
+import { Archive, LayoutGrid, CalendarDays } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CopyDictionary } from "@/lib/i18n";
 
@@ -10,7 +10,6 @@ const tabItems = [
   { labelKey: "navArchive" as const, icon: Archive, href: "/inspirations", matchPath: "/inspirations", matchView: undefined },
   { labelKey: "navCollections" as const, icon: LayoutGrid, href: "/inspirations?view=collections", matchPath: "/inspirations", matchView: "collections" },
   { labelKey: "navTimeline" as const, icon: CalendarDays, href: "/inspirations?view=timeline", matchPath: "/inspirations", matchView: "timeline" },
-  { labelKey: "navStudio" as const, icon: BarChart3, href: "/insights", matchPath: "/insights", matchView: undefined },
 ];
 
 export function MobileTabBar({ copy }: { copy: CopyDictionary }) {

@@ -13,6 +13,7 @@ import {
   analyzeInspiration,
   archiveInspiration,
   deleteInspiration,
+  getApiOrigin,
   getApiErrorMessage,
   updateInspiration,
   type Board,
@@ -21,6 +22,13 @@ import {
   type UILanguage,
 } from "@/lib/api";
 import { type CopyDictionary, getAnalysisLanguage } from "@/lib/i18n";
+
+function resolveFileUrl(fileUrl: string) {
+  if (!fileUrl) return "";
+  return fileUrl.startsWith("http://") || fileUrl.startsWith("https://")
+    ? fileUrl
+    : `${getApiOrigin()}${fileUrl}`;
+}
 
 export function ArchiveView({
   boards,
@@ -53,7 +61,6 @@ export function ArchiveView({
 
   const selectedBoardId = searchParams.get("board") ?? "";
   const selectedBoard = boards.find((b) => b.id === selectedBoardId) ?? null;
-  const activeTag = searchParams.get("tag") ?? null;
 
   const promptValue =
     analysisLanguage === "en" ? selectedItem?.analysis_prompt_en ?? "" : selectedItem?.analysis_prompt_zh ?? "";
@@ -61,29 +68,29 @@ export function ArchiveView({
     analysisLanguage === "en" ? selectedItem?.analysis_tags_en ?? [] : selectedItem?.analysis_tags_zh ?? [];
   const shareableTags = useMemo(() => tagsValue.join(", "), [tagsValue]);
 
-  // Collect top tags from all items for filter bar
-  const topTags = useMemo(() => {
-    const tagMap = new Map<string, number>();
+  const filteredItems = useMemo(() => {
+    if (!selectedBoardId) {
+      return items;
+    }
+
+    return items.filter((item) => item.board_id === selectedBoardId);
+  }, [items, selectedBoardId]);
+
+  const availableBoards = useMemo(() => {
+    const boardCounts = new Map<string, number>();
     for (const item of items) {
-      const tags = language === "en" ? item.analysis_tags_en : item.analysis_tags_zh;
-      for (const tag of tags) {
-        tagMap.set(tag, (tagMap.get(tag) ?? 0) + 1);
+      if (item.board_id) {
+        boardCounts.set(item.board_id, (boardCounts.get(item.board_id) ?? 0) + 1);
       }
     }
-    return [...tagMap.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 6)
-      .map(([tag]) => tag);
-  }, [items, language]);
-
-  // Filter items by active tag
-  const filteredItems = useMemo(() => {
-    if (!activeTag) return items;
-    return items.filter((item) => {
-      const tags = language === "en" ? item.analysis_tags_en : item.analysis_tags_zh;
-      return tags.includes(activeTag);
-    });
-  }, [items, activeTag, language]);
+    return boards
+      .filter((board) => boardCounts.has(board.id))
+      .sort((left, right) => {
+        const rightCount = boardCounts.get(right.id) ?? 0;
+        const leftCount = boardCounts.get(left.id) ?? 0;
+        return rightCount - leftCount || left.name.localeCompare(right.name);
+      });
+  }, [boards, items]);
 
   useEffect(() => {
     setAnalysisLanguage(getAnalysisLanguage(language));
@@ -214,25 +221,35 @@ export function ArchiveView({
       {/* Filter bar */}
       <FilterBar
         copy={copy}
-        tags={topTags}
-        activeTag={activeTag}
+        boards={availableBoards}
+        activeBoardId={selectedBoardId || null}
         status={status}
-        boardName={selectedBoard?.name ?? null}
         buildHref={buildHref}
       />
 
       {/* Content area */}
       <div className={`flex ${selectedItem ? "gap-0" : ""}`}>
-        {/* Grid */}
-        <div className={`flex-1 min-w-0 px-6 lg:px-12 py-6 ${selectedItem ? "hidden lg:block lg:pr-0" : ""}`}>
+        <div className={`flex-1 min-w-0 px-6 py-6 lg:px-12 ${selectedItem ? "lg:pr-0" : ""}`}>
           {filteredItems.length === 0 ? (
             <div className="text-center py-20">
               <p className="font-label text-sm uppercase tracking-widest text-muted-foreground">
                 {copy.emptyState}
               </p>
             </div>
+          ) : selectedItem ? (
+            <div className="mx-auto flex max-w-4xl justify-center">
+              <div className="w-full overflow-hidden rounded-[1.5rem] border border-border bg-card shadow-card">
+                <div className="flex min-h-[28rem] items-center justify-center bg-card p-6 lg:min-h-[calc(100vh-16rem)] lg:p-10">
+                  <img
+                    alt={selectedItem.title || selectedItem.original_filename || copy.unknown}
+                    src={resolveFileUrl(selectedItem.file_url)}
+                    className="max-h-[70vh] w-full object-contain"
+                  />
+                </div>
+              </div>
+            </div>
           ) : (
-            <div className="columns-2 md:columns-3 lg:columns-4 gap-5">
+            <div className="grid grid-cols-1 gap-x-5 gap-y-8 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
               {filteredItems.map((item) => (
                 <InspirationCard
                   key={item.id}
@@ -248,7 +265,7 @@ export function ArchiveView({
 
         {/* Inspector */}
         {selectedItem && (
-          <aside className="w-full lg:w-[340px] lg:min-w-[340px] border-l border-border h-[calc(100vh-68px)] sticky top-[68px]">
+          <aside className="w-full border-l border-border lg:sticky lg:top-[72px] lg:h-[calc(100vh-72px)] lg:w-[340px] lg:min-w-[340px]">
             <InspectorPanel
               analysisLanguage={analysisLanguage}
               boards={boards}

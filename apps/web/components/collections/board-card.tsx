@@ -4,14 +4,12 @@ import type { CopyDictionary } from "@/lib/i18n";
 export function BoardCard({
   name,
   count,
-  primaryTag,
   coverUrl,
   href,
   copy,
 }: {
   name: string;
   count: number;
-  primaryTag: string | null;
   coverUrl: string | null;
   href: string;
   copy: CopyDictionary;
@@ -27,8 +25,8 @@ export function BoardCard({
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
-            <span className="font-headline text-3xl text-primary/20 italic">
-              {name.charAt(0).toUpperCase()}
+            <span className="font-body text-3xl font-semibold text-primary/22">
+              空
             </span>
           </div>
         )}
@@ -39,7 +37,6 @@ export function BoardCard({
         </h3>
         <p className="font-label text-[9px] uppercase tracking-[0.3em] text-muted-foreground mt-1">
           {count} {copy.artifactCount}
-          {primaryTag ? ` / ${primaryTag}` : ""}
         </p>
       </div>
     </Link>

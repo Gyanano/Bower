@@ -560,6 +560,24 @@ def test_boards_search_and_board_filtering(client: TestClient, monkeypatch):
     assert [item["id"] for item in filtered.json()["data"]] == [second["id"]]
 
 
+def test_create_board_and_reject_duplicate_name(client: TestClient):
+    created = client.post("/api/v1/boards", json={"name": "品牌系统"})
+
+    assert created.status_code == 201
+    created_board = created.json()["data"]
+    assert created_board["name"] == "品牌系统"
+    assert created_board["id"].startswith("board_")
+    assert created_board["slug"] == "board"
+
+    listed = client.get("/api/v1/boards")
+    assert listed.status_code == 200
+    assert any(board["id"] == created_board["id"] for board in listed.json()["data"])
+
+    duplicate = client.post("/api/v1/boards", json={"name": "品牌系统"})
+    assert duplicate.status_code == 409
+    assert duplicate.json()["error"]["code"] == "BOARD_ALREADY_EXISTS"
+
+
 def test_analyze_requires_configured_provider(client: TestClient, monkeypatch):
     create_response = client.post(
         "/api/v1/inspirations",

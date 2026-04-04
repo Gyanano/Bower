@@ -2,32 +2,32 @@
 
 @theme {
   /* ── Color Palette ── */
-  --color-background: #f9f9f7;
+  --color-background: #f8f5ef;
   --color-foreground: #1a1c1b;
   --color-primary: #002b6b;
   --color-primary-foreground: #ffffff;
   --color-primary-light: #002b6b0f;
   --color-accent: #1a428a;
   --color-accent-foreground: #ffffff;
-  --color-muted: #eeeeec;
-  --color-muted-foreground: #747782;
+  --color-muted: #f0ece5;
+  --color-muted-foreground: #78726d;
   --color-card: #ffffff;
   --color-card-foreground: #1a1c1b;
   --color-border: #002b6b1a;
-  --color-input: #e2e3e1;
+  --color-input: #e2ddd6;
   --color-ring: #002b6b33;
   --color-destructive: #ba1a1a;
   --color-destructive-foreground: #ffffff;
   --color-success: #0a9f63;
-  --color-surface: #f4f4f2;
-  --color-surface-high: #e8e8e6;
-  --color-outline: #747782;
-  --color-outline-variant: #c4c6d2;
+  --color-surface: #f5f2ec;
+  --color-surface-high: #ebe5dc;
+  --color-outline: #7d7872;
+  --color-outline-variant: #d2cbc1;
 
   /* ── Typography ── */
-  --font-headline: "Newsreader", "Georgia", serif;
+  --font-headline: var(--font-headline-latin), var(--font-headline-cjk), "Songti SC", "STSong", serif;
   --font-label: "Space Grotesk", "Arial", sans-serif;
-  --font-body: "Manrope", "Helvetica Neue", sans-serif;
+  --font-body: var(--font-body-latin), var(--font-body-cjk), "PingFang SC", "Hiragino Sans GB", "Helvetica Neue", sans-serif;
 
   /* ── Radius ── */
   --radius-sm: 0.25rem;
@@ -80,6 +80,7 @@
   html {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    overscroll-behavior-y: none;
   }
 
   body {
@@ -88,6 +89,7 @@
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-body);
+    overscroll-behavior-y: none;
   }
 
   a {

@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { AppShell } from "@/components/layout/app-shell";
 import { Footer } from "@/components/layout/footer";
 import { PageHero } from "@/components/layout/page-hero";
+import { AddBoardCard } from "./add-board-card";
 import { BoardCard } from "./board-card";
 import { getApiOrigin, type Board, type InspirationListItem, type UILanguage } from "@/lib/api";
 import type { CopyDictionary } from "@/lib/i18n";
@@ -19,21 +19,8 @@ export function CollectionsView({
   language: UILanguage;
   copy: CopyDictionary;
 }) {
-  // Group items by board and compute stats
   const boardStats = boards.map((board) => {
     const boardItems = items.filter((item) => item.board_id === board.id);
-    const allTags: string[] = [];
-    for (const item of boardItems) {
-      const tags = language === "en" ? item.analysis_tags_en : item.analysis_tags_zh;
-      allTags.push(...tags);
-    }
-    // Find primary tag
-    const tagCounts = new Map<string, number>();
-    for (const tag of allTags) {
-      tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
-    }
-    const primaryTag = [...tagCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
-    // Cover image from first item
     const coverItem = boardItems[0] ?? null;
     const coverUrl = coverItem
       ? coverItem.file_url.startsWith("http")
@@ -44,7 +31,6 @@ export function CollectionsView({
     return {
       board,
       count: boardItems.length,
-      primaryTag,
       coverUrl,
     };
   });
@@ -66,12 +52,11 @@ export function CollectionsView({
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 lg:gap-8">
-            {boardStats.map(({ board, count, primaryTag, coverUrl }) => (
+            {boardStats.map(({ board, count, coverUrl }) => (
               <BoardCard
                 key={board.id}
                 name={board.name}
                 count={count}
-                primaryTag={primaryTag}
                 coverUrl={coverUrl}
                 href={`/inspirations?board=${board.id}`}
                 copy={copy}
@@ -83,7 +68,6 @@ export function CollectionsView({
               <BoardCard
                 name={copy.noBoard}
                 count={unassigned.length}
-                primaryTag={null}
                 coverUrl={
                   unassigned[0]
                     ? unassigned[0].file_url.startsWith("http")
@@ -95,6 +79,8 @@ export function CollectionsView({
                 copy={copy}
               />
             )}
+
+            <AddBoardCard copy={copy} />
           </div>
         )}
       </div>

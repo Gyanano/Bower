@@ -1,15 +1,22 @@
 import type { Metadata } from "next";
-import { Newsreader, Space_Grotesk, Manrope } from "next/font/google";
+import { Newsreader, Space_Grotesk, Manrope, Noto_Serif_SC, Noto_Sans_SC } from "next/font/google";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { getAppPreferences } from "@/lib/api";
 import "./globals.css";
 
 const newsreader = Newsreader({
   subsets: ["latin"],
-  variable: "--font-headline",
+  variable: "--font-headline-latin",
   display: "swap",
   weight: ["200", "300", "400", "500", "600", "700", "800"],
   style: ["normal", "italic"],
+});
+
+const notoSerifSc = Noto_Serif_SC({
+  variable: "--font-headline-cjk",
+  display: "swap",
+  preload: false,
+  weight: ["400", "500", "600", "700"],
 });
 
 const spaceGrotesk = Space_Grotesk({
@@ -21,9 +28,16 @@ const spaceGrotesk = Space_Grotesk({
 
 const manrope = Manrope({
   subsets: ["latin"],
-  variable: "--font-body",
+  variable: "--font-body-latin",
   display: "swap",
   weight: ["200", "300", "400", "500", "600", "700", "800"],
+});
+
+const notoSansSc = Noto_Sans_SC({
+  variable: "--font-body-cjk",
+  display: "swap",
+  preload: false,
+  weight: ["400", "500", "700"],
 });
 
 export const metadata: Metadata = {
@@ -43,7 +57,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html
       lang={uiLanguage}
-      className={`${newsreader.variable} ${spaceGrotesk.variable} ${manrope.variable}`}
+      className={`${newsreader.variable} ${notoSerifSc.variable} ${spaceGrotesk.variable} ${manrope.variable} ${notoSansSc.variable}`}
     >
       <body>
         <TooltipProvider delayDuration={300}>
