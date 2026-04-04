@@ -13,9 +13,7 @@ import {
   type AIProvider,
   type AISettings,
   type AppPreferences,
-  type UILanguage,
   updateAiSettings,
-  updateAppPreferences,
 } from "@/lib/api";
 import { type CopyDictionary } from "@/lib/i18n";
 import { formatUtcTimestamp } from "@/lib/format";
@@ -43,7 +41,7 @@ export function SettingsClient({
   const [apiKey, setApiKey] = useState("");
   const [isApiKeyDirty, setIsApiKeyDirty] = useState(false);
   const [clearApiKey, setClearApiKey] = useState(false);
-  const [uiLanguage] = useState<UILanguage>("zh-CN");
+  const uiLanguage = preferences.ui_language;
   const [storedProvider, setStoredProvider] = useState<AIProvider | null>(settings.provider);
   const [hasStoredKey, setHasStoredKey] = useState(settings.has_api_key);
   const [storedKeyMask, setStoredKeyMask] = useState(settings.api_key_mask ?? "");
@@ -59,15 +57,12 @@ export function SettingsClient({
   }
 
   async function persistSettings() {
-    const [aiSettingsResult] = await Promise.all([
-      updateAiSettings({
-        provider,
-        model_id: modelId.trim() || null,
-        ...(clearApiKey ? { clear_api_key: true as const } : {}),
-        ...(!clearApiKey && isApiKeyDirty && apiKey.trim() ? { api_key: apiKey.trim() } : {}),
-      }),
-      updateAppPreferences({ ui_language: uiLanguage }),
-    ]);
+    const aiSettingsResult = await updateAiSettings({
+      provider,
+      model_id: modelId.trim() || null,
+      ...(clearApiKey ? { clear_api_key: true as const } : {}),
+      ...(!clearApiKey && isApiKeyDirty && apiKey.trim() ? { api_key: apiKey.trim() } : {}),
+    });
     setApiKey("");
     setIsApiKeyDirty(false);
     setClearApiKey(false);
@@ -290,7 +285,10 @@ export function SettingsClient({
               type="button"
               disabled
               className={cn(
-                "cursor-not-allowed rounded-full px-4 py-2 text-sm transition-colors text-muted-foreground/70",
+                "cursor-not-allowed rounded-full px-4 py-2 text-sm transition-colors",
+                uiLanguage === "en"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground/70",
               )}
             >
               English (coming soon)
