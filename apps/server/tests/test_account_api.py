@@ -33,70 +33,117 @@ def _auth_header(token: str):
 
 
 def test_account_status_guest():
-    response = client.get("/api/v1/settings/account")
-    assert response.status_code == 200
-    data = response.json()["data"]
+    resp = client.get("/api/v1/settings/account")
+    assert resp.status_code == 200
+    data = resp.json()["data"]
     assert data["logged_in"] is False
     assert data["profile"] is None
 
 
 def test_register_account():
-    response = _register()
-    assert response.status_code == 201
-    data = response.json()["data"]
+    resp = _register()
+    assert resp.status_code == 201
+    data = resp.json()["data"]
+    assert "token" in data
+    assert data["profile"]["display_name"] == "Alice"
+    assert data["profile"]["email"] == "alice@example.com"
+    assert "created_at" in data["profile"]
+
+
+def test_register_duplicate_fails():
+    _register()
+    resp = _register()
+    assert resp.status_code == 409
+    assert resp.json()["error"]["code"] == "ACCOUNT_EXISTS"
+
+
+def test_login_success():
+    _register()
+
+    resp = _login()
+    assert resp.status_code == 200
+    data = resp.json()["data"]
     assert "token" in data
     assert data["profile"]["display_name"] == "Alice"
     assert data["profile"]["email"] == "alice@example.com"
 
 
-def test_register_duplicate_fails():
-    _register()
-    response = _register()
-    assert response.status_code == 409
-    assert response.json()["error"]["code"] == "ACCOUNT_EXISTS"
-
-
-def test_login_success():
-    _register()
-    response = _login()
-    assert response.status_code == 200
-    assert response.json()["data"]["profile"]["email"] == "alice@example.com"
-
-
 def test_login_wrong_password():
     _register()
-    response = _login(password="wrong")
-    assert response.status_code == 401
-    assert response.json()["error"]["code"] == "INVALID_CREDENTIALS"
+    resp = _login(password="wrong")
+    assert resp.status_code == 401
+    assert resp.json()["error"]["code"] == "INVALID_CREDENTIALS"
+
+
+def test_login_nonexistent_email():
+    _register()
+    resp = _login(email="nobody@example.com")
+    assert resp.status_code == 401
+    assert resp.json()["error"]["code"] == "INVALID_CREDENTIALS"
+
+
+def test_account_status_logged_in():
+    reg = _register()
+    token = reg.json()["data"]["token"]
+
+    resp = client.get("/api/v1/settings/account", headers=_auth_header(token))
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data["logged_in"] is True
+    assert data["profile"]["display_name"] == "Alice"
 
 
 def test_update_profile_display_name():
-    token = _register().json()["data"]["token"]
-    response = client.put(
+    reg = _register()
+    token = reg.json()["data"]["token"]
+
+    resp = client.put(
         "/api/v1/settings/account/profile",
         json={"display_name": "Bob"},
         headers=_auth_header(token),
     )
-    assert response.status_code == 200
-    assert response.json()["data"]["display_name"] == "Bob"
+    assert resp.status_code == 200
+    assert resp.json()["data"]["display_name"] == "Bob"
+    assert resp.json()["data"]["email"] == "alice@example.com"
 
 
 def test_update_password():
-    token = _register().json()["data"]["token"]
-    response = client.put(
+    reg = _register()
+    token = reg.json()["data"]["token"]
+
+    resp = client.put(
         "/api/v1/settings/account/profile",
         json={"current_password": "secret123", "new_password": "newpass456"},
         headers=_auth_header(token),
     )
-    assert response.status_code == 200
-    assert _login(password="secret123").status_code == 401
-    assert _login(password="newpass456").status_code == 200
+    assert resp.status_code == 200
+
+    # old password should fail
+    resp = _login(password="secret123")
+    assert resp.status_code == 401
+
+    # new password should work
+    resp = _login(password="newpass456")
+    assert resp.status_code == 200
 
 
 def test_delete_account():
-    token = _register().json()["data"]["token"]
-    response = client.delete("/api/v1/settings/account", headers=_auth_header(token))
-    assert response.status_code == 204
-    status = client.get("/api/v1/settings/account").json()["data"]
-    assert status["logged_in"] is False
-    assert status["profile"] is None
+    reg = _register()
+    token = reg.json()["data"]["token"]
+
+    resp = client.delete("/api/v1/settings/account", headers=_auth_header(token))
+    assert resp.status_code == 204
+
+    # should be back to guest
+    resp = client.get("/api/v1/settings/account")
+    data = resp.json()["data"]
+    assert data["logged_in"] is False
+    assert data["profile"] is None
+
+    # old token should be rejected after jwt_secret rotation
+    resp = client.put(
+        "/api/v1/settings/account/profile",
+        json={"display_name": "ghost"},
+        headers=_auth_header(token),
+    )
+    assert resp.status_code == 401

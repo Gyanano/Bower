@@ -17,23 +17,24 @@ from app.schemas.account import (
     AuthToken,
     AuthTokenEnvelope,
 )
+from app.utils import utc_now
 
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRY_DAYS = 30
 
 
-def _utc_now() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-
-
 def _get_or_create_jwt_secret() -> str:
     with get_connection() as connection:
-        row = connection.execute("SELECT jwt_secret FROM app_preferences WHERE id = 1").fetchone()
+        row = connection.execute(
+            "SELECT jwt_secret FROM app_preferences WHERE id = 1"
+        ).fetchone()
         if row and row["jwt_secret"]:
             return row["jwt_secret"]
-
         secret = secrets.token_hex(32)
-        connection.execute("UPDATE app_preferences SET jwt_secret = ? WHERE id = 1", (secret,))
+        connection.execute(
+            "UPDATE app_preferences SET jwt_secret = ? WHERE id = 1",
+            (secret,),
+        )
         connection.commit()
         return secret
 
@@ -86,7 +87,6 @@ def _row_to_profile(row) -> AccountProfile:
 def _extract_token(authorization: str | None) -> str | None:
     if not authorization:
         return None
-
     parts = authorization.split(" ", 1)
     if len(parts) == 2 and parts[0].lower() == "bearer":
         return parts[1].strip()
@@ -100,8 +100,9 @@ def get_account_status(authorization: str | None) -> AccountStatusEnvelope:
         if user_id is not None:
             row = _fetch_user_row()
             if row:
-                return AccountStatusEnvelope(data=AccountStatus(logged_in=True, profile=_row_to_profile(row)))
-
+                return AccountStatusEnvelope(
+                    data=AccountStatus(logged_in=True, profile=_row_to_profile(row))
+                )
     return AccountStatusEnvelope(data=AccountStatus(logged_in=False, profile=None))
 
 
@@ -110,7 +111,7 @@ def register_account(payload: AccountRegister) -> AuthTokenEnvelope:
     if existing is not None:
         raise AppError(409, "ACCOUNT_EXISTS", "An account already exists on this device")
 
-    now = _utc_now()
+    now = utc_now()
     password_hash = _hash_password(payload.password)
 
     with get_connection() as connection:
@@ -131,7 +132,13 @@ def register_account(payload: AccountRegister) -> AuthTokenEnvelope:
 
 def login_account(payload: AccountLogin) -> AuthTokenEnvelope:
     row = _fetch_user_row()
-    if row is None or row["email"] != payload.email or not _verify_password(payload.password, row["password_hash"]):
+    if row is None:
+        raise AppError(401, "INVALID_CREDENTIALS", "Invalid email or password")
+
+    if row["email"] != payload.email:
+        raise AppError(401, "INVALID_CREDENTIALS", "Invalid email or password")
+
+    if not _verify_password(payload.password, row["password_hash"]):
         raise AppError(401, "INVALID_CREDENTIALS", "Invalid email or password")
 
     profile = _row_to_profile(row)
@@ -152,7 +159,7 @@ def update_account_profile(authorization: str | None, payload: AccountProfileUpd
         if not payload.current_password or not _verify_password(payload.current_password, row["password_hash"]):
             raise AppError(401, "INVALID_CREDENTIALS", "Current password is incorrect")
 
-    now = _utc_now()
+    now = utc_now()
     new_display_name = payload.display_name if payload.display_name is not None else row["display_name"]
     new_email = payload.email if payload.email is not None else row["email"]
     new_password_hash = _hash_password(payload.new_password) if payload.new_password else row["password_hash"]
@@ -179,5 +186,10 @@ def delete_account(authorization: str | None) -> None:
 
     with get_connection() as connection:
         connection.execute("DELETE FROM local_user WHERE id = 1")
-        connection.execute("UPDATE app_preferences SET jwt_secret = ? WHERE id = 1", (secrets.token_hex(32),))
+        # Rotate jwt_secret so all previously issued tokens become invalid
+        new_secret = secrets.token_hex(32)
+        connection.execute(
+            "UPDATE app_preferences SET jwt_secret = ? WHERE id = 1",
+            (new_secret,),
+        )
         connection.commit()

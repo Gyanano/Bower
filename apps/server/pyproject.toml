@@ -10,7 +10,11 @@ dependencies = [
   "pyjwt>=2.10.1",
   "python-multipart>=0.0.20",
   "pydantic>=2.11.3",
-  "uvicorn>=0.34.0"
+  "pydantic[email]>=2.11.3",
+  "uvicorn>=0.34.0",
+  "websockets>=15.0.1",
+  "bcrypt>=4.2.0",
+  "PyJWT>=2.9.0",
 ]
 
 [build-system]

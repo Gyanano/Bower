@@ -1,8 +1,8 @@
 import os
 from dataclasses import dataclass
-from datetime import datetime, timezone
 
 from app.db.sqlite import get_connection
+from app.utils import utc_now
 from app.errors import AppError
 from app.schemas.ai_settings import (
     AIProvider,
@@ -66,10 +66,6 @@ class ResolvedAIProviderSettings:
     api_key_source: str | None
     updated_at: str | None
     legacy_openai_base_url: str | None = None
-
-
-def _utc_now() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def _normalize_optional_text(value: str | None) -> str | None:
@@ -195,7 +191,7 @@ def update_ai_settings(payload: AISettingsUpdate) -> AISettingsEnvelope:
                 payload.provider,
                 _normalize_optional_text(payload.model_id),
                 api_key,
-                _utc_now(),
+                utc_now(),
             ),
         )
         connection.commit()
