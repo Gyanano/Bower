@@ -440,11 +440,13 @@ export async function loginAccount(payload: AccountLoginPayload) {
 }
 
 export async function updateAccountProfile(payload: AccountProfileUpdatePayload) {
-  return apiFetch<{ data: AccountProfile }>("/settings/account/profile", {
+  const result = await apiFetch<{ data: AccountProfile }>("/settings/account/profile", {
     body: JSON.stringify(payload),
     headers: { "content-type": "application/json", ...authHeaders() },
     method: "PUT",
   });
+  dispatchAuthStateEvent();
+  return result;
 }
 
 export async function deleteAccount() {

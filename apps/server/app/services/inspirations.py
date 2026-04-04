@@ -193,7 +193,11 @@ def _fetch_record_query() -> str:
 def _find_record_by_source_url(source_url: str) -> InspirationRecord | None:
     with get_connection() as connection:
         row = connection.execute(
-            f"{_fetch_record_query()} WHERE inspirations.source_url = ? ORDER BY datetime(inspirations.created_at) DESC, inspirations.id DESC LIMIT 1",
+            (
+                f"{_fetch_record_query()} "
+                "WHERE inspirations.source_url = ? AND inspirations.status = 'active' "
+                "ORDER BY datetime(inspirations.created_at) DESC, inspirations.id DESC LIMIT 1"
+            ),
             (source_url,),
         ).fetchone()
 

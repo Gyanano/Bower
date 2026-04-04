@@ -1,0 +1,31 @@
+{
+  "setup": [
+    "echo '📦 Installing frontend dependencies...'",
+    "npm run install:web",
+    "echo '🐍 Setting up Python backend (.venv via uv)...'",
+    "npm run sync:server",
+    "echo '🗄️ Ensuring data directories exist...'",
+    "mkdir -p data/store",
+    "echo '⚙️ Checking frontend env...'",
+    "[ ! -f apps/web/.env.local ] && echo 'NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000/api/v1' > apps/web/.env.local && echo '  Created apps/web/.env.local' || echo '  apps/web/.env.local already exists'",
+    "echo '✅ Setup complete!'"
+  ],
+  "teardown": [
+    "echo '🧹 Cleaning up workspace...'",
+    "rm -rf apps/web/.next apps/web/node_modules/.cache",
+    "echo '  Cleaned frontend build artifacts'",
+    "find apps/server -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true",
+    "find apps/server -type d -name '.pytest_cache' -exec rm -rf {} + 2>/dev/null || true",
+    "rm -rf apps/server/bower_server.egg-info",
+    "echo '  Cleaned backend cache'",
+    "echo '✅ Cleanup complete!'"
+  ],
+  "run": [
+    "echo '💡 Superset workspace ready!'",
+    "echo ''",
+    "echo '   Backend:  npm run dev:server   → http://localhost:8000'",
+    "echo '   Frontend: npm run dev:web      → http://localhost:3000'",
+    "echo '   API docs: http://localhost:8000/docs'",
+    "echo '   Tests:    npm run test:server'"
+  ]
+}
