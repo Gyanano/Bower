@@ -439,6 +439,54 @@ def test_browser_extension_clip_deduplicates_by_source_url(client: TestClient):
     assert listed.json()["meta"]["total"] == 1
 
 
+def test_browser_extension_clip_creates_new_active_item_when_previous_match_is_archived(client: TestClient):
+    payload = {
+        "source_url": " https://example.com/reference/archived-dedupe ",
+        "title": "第一次摘录",
+        "summary": "Warm neutral product setup.",
+        "summary_en": "Warm neutral product setup.",
+        "summary_zh": "暖中性色调的产品布景。",
+        "prompt_en": "A warm neutral product setup with soft daylight and tactile materials.",
+        "prompt_zh": "一个暖中性色调的产品布景，具有柔和自然光和清晰材质细节。",
+        "tags_en": json.dumps(["product", "warm neutral", "soft light"]),
+        "tags_zh": json.dumps(["产品", "暖中性色", "柔光"]),
+        "colors": json.dumps(["#F2E6D8", "#C8B29E", "#6F6258"]),
+    }
+
+    first = client.post(
+        "/api/v1/image-analysis/clip",
+        data=payload,
+        files={"file": ("sample.png", PNG_BYTES, "image/png")},
+    )
+    first_id = first.json()["data"]["id"]
+
+    archived = client.post(f"/api/v1/inspirations/{first_id}/archive")
+    assert archived.status_code == 200
+    assert archived.json()["data"]["status"] == "archived"
+
+    second = client.post(
+        "/api/v1/image-analysis/clip",
+        data={**payload, "title": "第二次摘录"},
+        files={"file": ("sample-again.png", PNG_BYTES, "image/png")},
+    )
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert second.json()["data"]["id"] != first_id
+    assert second.json()["data"]["status"] == "active"
+    assert second.json()["data"]["title"] == "第二次摘录"
+
+    active_list = client.get("/api/v1/inspirations")
+    archived_list = client.get("/api/v1/inspirations?status=archived")
+
+    assert active_list.status_code == 200
+    assert archived_list.status_code == 200
+    assert active_list.json()["meta"]["total"] == 1
+    assert archived_list.json()["meta"]["total"] == 1
+    assert active_list.json()["data"][0]["id"] == second.json()["data"]["id"]
+    assert archived_list.json()["data"][0]["id"] == first_id
+
+
 def test_browser_extension_clip_allows_duplicates_without_source_url(client: TestClient):
     payload = {
         "summary": "Warm neutral product setup.",

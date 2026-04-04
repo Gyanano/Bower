@@ -60,6 +60,6 @@ async def events_socket(websocket: WebSocket):
 app.include_router(inspirations_router, prefix="/api/v1")
 app.include_router(image_analysis_router, prefix="/api/v1")
 app.include_router(boards_router, prefix="/api/v1")
+app.include_router(account_router, prefix="/api/v1")
 app.include_router(settings_ai_router, prefix="/api/v1")
 app.include_router(settings_preferences_router, prefix="/api/v1")
-app.include_router(account_router, prefix="/api/v1")

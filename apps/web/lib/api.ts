@@ -144,12 +144,23 @@ class ApiError extends Error {
   }
 }
 
+const AUTH_TOKEN_KEY = "bower_auth_token";
+export const AUTH_STATE_EVENT = "bower-auth-state-change";
+
 function getApiBaseUrl() {
   return process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api/v1";
 }
 
 export function getApiOrigin() {
   return new URL(getApiBaseUrl()).origin;
+}
+
+function dispatchAuthStateEvent() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.dispatchEvent(new Event(AUTH_STATE_EVENT));
 }
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -371,19 +382,30 @@ export function getApiErrorMessage(error: unknown) {
   return "Request failed";
 }
 
-const AUTH_TOKEN_KEY = "bower_auth_token";
-
 export function getAuthToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem(AUTH_TOKEN_KEY);
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  return window.localStorage.getItem(AUTH_TOKEN_KEY);
 }
 
 export function setAuthToken(token: string) {
-  localStorage.setItem(AUTH_TOKEN_KEY, token);
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(AUTH_TOKEN_KEY, token);
+  dispatchAuthStateEvent();
 }
 
 export function clearAuthToken() {
-  localStorage.removeItem(AUTH_TOKEN_KEY);
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.removeItem(AUTH_TOKEN_KEY);
+  dispatchAuthStateEvent();
 }
 
 function authHeaders(): Record<string, string> {
@@ -418,11 +440,13 @@ export async function loginAccount(payload: AccountLoginPayload) {
 }
 
 export async function updateAccountProfile(payload: AccountProfileUpdatePayload) {
-  return apiFetch<{ data: AccountProfile }>("/settings/account/profile", {
+  const result = await apiFetch<{ data: AccountProfile }>("/settings/account/profile", {
     body: JSON.stringify(payload),
     headers: { "content-type": "application/json", ...authHeaders() },
     method: "PUT",
   });
+  dispatchAuthStateEvent();
+  return result;
 }
 
 export async function deleteAccount() {

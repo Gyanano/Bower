@@ -4,7 +4,10 @@ version = "0.1.0"
 description = "Bower MVP foundation FastAPI backend"
 requires-python = ">=3.11"
 dependencies = [
+  "bcrypt>=4.3.0",
+  "email-validator>=2.2.0",
   "fastapi>=0.115.12",
+  "pyjwt>=2.10.1",
   "python-multipart>=0.0.20",
   "pydantic>=2.11.3",
   "pydantic[email]>=2.11.3",

@@ -109,6 +109,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "bcrypt" },
+    { name = "email-validator" },
     { name = "fastapi" },
     { name = "pydantic", extra = ["email"] },
     { name = "pyjwt" },
@@ -120,10 +121,13 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "bcrypt", specifier = ">=4.2.0" },
+    { name = "bcrypt", specifier = ">=4.3.0" },
+    { name = "email-validator", specifier = ">=2.2.0" },
     { name = "fastapi", specifier = ">=0.115.12" },
     { name = "pydantic", specifier = ">=2.11.3" },
     { name = "pydantic", extras = ["email"], specifier = ">=2.11.3" },
     { name = "pyjwt", specifier = ">=2.9.0" },
+    { name = "pyjwt", specifier = ">=2.10.1" },
     { name = "python-multipart", specifier = ">=0.0.20" },
     { name = "uvicorn", specifier = ">=0.34.0" },
     { name = "websockets", specifier = ">=15.0.1" },
