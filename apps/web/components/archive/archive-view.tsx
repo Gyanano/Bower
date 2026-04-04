@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Footer } from "@/components/layout/footer";
+import { PageHero } from "@/components/layout/page-hero";
 import { InspirationCard } from "./inspiration-card";
 import { FilterBar } from "./filter-bar";
 import { InspectorPanel } from "./inspector-panel";
@@ -190,19 +191,7 @@ export function ArchiveView({
       onSearchClick={() => setSearchOpen(!searchOpen)}
       onUploadClick={() => setUploadOpen(true)}
     >
-      {/* Hero */}
-      <section className="pt-12 lg:pt-20 pb-6 lg:pb-10 text-center px-6">
-        <h1 className="font-headline text-4xl md:text-5xl lg:text-7xl uppercase tracking-[0.15em] text-primary mb-3">
-          {copy.heroArchiveTitle}
-        </h1>
-        <p className="font-label text-[10px] lg:text-xs uppercase tracking-[0.5em] text-muted-foreground italic">
-          {copy.heroArchiveSubtitle}
-        </p>
-        {/* Decorative divider */}
-        <div className="flex justify-center mt-6">
-          <div className="w-px h-10 bg-primary/20" />
-        </div>
-      </section>
+      <PageHero title={copy.heroArchiveTitle} subtitle={copy.heroArchiveSubtitle} />
 
       {/* Search bar (collapsible) */}
       {searchOpen && (

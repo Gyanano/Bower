@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { AppShell } from "@/components/layout/app-shell";
 import { Footer } from "@/components/layout/footer";
+import { PageHero } from "@/components/layout/page-hero";
 import { BoardCard } from "./board-card";
 import { getApiOrigin, type Board, type InspirationListItem, type UILanguage } from "@/lib/api";
 import type { CopyDictionary } from "@/lib/i18n";
@@ -53,18 +54,7 @@ export function CollectionsView({
 
   return (
     <AppShell copy={copy}>
-      {/* Hero */}
-      <section className="pt-12 lg:pt-20 pb-6 lg:pb-10 text-center px-6">
-        <h1 className="font-headline text-4xl md:text-5xl lg:text-7xl uppercase tracking-[0.15em] text-primary mb-3">
-          {copy.heroCollectionsTitle}
-        </h1>
-        <p className="font-label text-[10px] lg:text-xs uppercase tracking-[0.5em] text-muted-foreground italic">
-          {copy.heroCollectionsSubtitle}
-        </p>
-        <div className="flex justify-center mt-6">
-          <div className="w-px h-10 bg-primary/20" />
-        </div>
-      </section>
+      <PageHero title={copy.heroCollectionsTitle} subtitle={copy.heroCollectionsSubtitle} />
 
       {/* Board grid */}
       <div className="px-6 lg:px-12 py-8">

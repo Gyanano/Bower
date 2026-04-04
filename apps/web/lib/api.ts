@@ -80,6 +80,41 @@ export interface AppPreferences {
   updated_at: string | null;
 }
 
+export interface AccountProfile {
+  display_name: string;
+  email: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AccountStatus {
+  logged_in: boolean;
+  profile: AccountProfile | null;
+}
+
+export interface AccountRegisterPayload {
+  display_name: string;
+  email: string;
+  password: string;
+}
+
+export interface AccountLoginPayload {
+  email: string;
+  password: string;
+}
+
+export interface AccountProfileUpdatePayload {
+  display_name?: string;
+  email?: string;
+  current_password?: string;
+  new_password?: string;
+}
+
+export interface AuthTokenResponse {
+  token: string;
+  profile: AccountProfile;
+}
+
 export type InsightsWarningReason = "request_failed" | "request_limit_reached";
 
 export interface AllInspirationsResult {
@@ -109,12 +144,23 @@ class ApiError extends Error {
   }
 }
 
+const AUTH_TOKEN_KEY = "bower_auth_token";
+export const AUTH_STATE_EVENT = "bower-auth-state-change";
+
 function getApiBaseUrl() {
   return process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api/v1";
 }
 
 export function getApiOrigin() {
   return new URL(getApiBaseUrl()).origin;
+}
+
+function dispatchAuthStateEvent() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.dispatchEvent(new Event(AUTH_STATE_EVENT));
 }
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -334,4 +380,81 @@ export function getApiErrorMessage(error: unknown) {
   }
 
   return "Request failed";
+}
+
+export function getAuthToken(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  return window.localStorage.getItem(AUTH_TOKEN_KEY);
+}
+
+export function setAuthToken(token: string) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(AUTH_TOKEN_KEY, token);
+  dispatchAuthStateEvent();
+}
+
+export function clearAuthToken() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.removeItem(AUTH_TOKEN_KEY);
+  dispatchAuthStateEvent();
+}
+
+function authHeaders(): Record<string, string> {
+  const token = getAuthToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+export async function getAccountStatus() {
+  return apiFetch<{ data: AccountStatus }>("/settings/account", {
+    headers: { ...authHeaders() },
+  });
+}
+
+export async function registerAccount(payload: AccountRegisterPayload) {
+  const result = await apiFetch<{ data: AuthTokenResponse }>("/settings/account/register", {
+    body: JSON.stringify(payload),
+    headers: { "content-type": "application/json" },
+    method: "POST",
+  });
+  setAuthToken(result.data.token);
+  return result;
+}
+
+export async function loginAccount(payload: AccountLoginPayload) {
+  const result = await apiFetch<{ data: AuthTokenResponse }>("/settings/account/login", {
+    body: JSON.stringify(payload),
+    headers: { "content-type": "application/json" },
+    method: "POST",
+  });
+  setAuthToken(result.data.token);
+  return result;
+}
+
+export async function updateAccountProfile(payload: AccountProfileUpdatePayload) {
+  return apiFetch<{ data: AccountProfile }>("/settings/account/profile", {
+    body: JSON.stringify(payload),
+    headers: { "content-type": "application/json", ...authHeaders() },
+    method: "PUT",
+  });
+}
+
+export async function deleteAccount() {
+  await apiFetch<void>("/settings/account", {
+    headers: { ...authHeaders() },
+    method: "DELETE",
+  });
+  clearAuthToken();
+}
+
+export function logoutAccount() {
+  clearAuthToken();
 }

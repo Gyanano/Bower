@@ -13,7 +13,7 @@ export function Footer({ copy }: { copy: CopyDictionary }) {
           className="rounded-full opacity-40"
         />
         <p className="font-headline italic text-primary text-lg lg:text-xl">
-          {copy.footerBrand} &copy; 2024
+          {copy.footerBrand} &copy; 2026
         </p>
       </div>
       <p className="font-label text-[9px] uppercase tracking-[0.3em] text-muted-foreground">

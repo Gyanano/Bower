@@ -42,6 +42,19 @@ def initialize_database() -> None:
             CREATE TABLE IF NOT EXISTS app_preferences (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
                 ui_language TEXT NOT NULL,
+                jwt_secret TEXT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS local_user (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                display_name TEXT NOT NULL,
+                email TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             )
             """
@@ -87,6 +100,10 @@ def initialize_database() -> None:
             )
             """
         )
+
+        preference_columns = {row["name"] for row in connection.execute("PRAGMA table_info(app_preferences)").fetchall()}
+        if "jwt_secret" not in preference_columns:
+            connection.execute("ALTER TABLE app_preferences ADD COLUMN jwt_secret TEXT NULL")
 
         columns = {row["name"] for row in connection.execute("PRAGMA table_info(inspirations)").fetchall()}
         board_id_added = "board_id" not in columns

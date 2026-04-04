@@ -1,11 +1,11 @@
+import { LoginPanel } from "@/components/auth/login-panel";
 import { AppShell } from "@/components/layout/app-shell";
-import { UploadPagePanel } from "@/components/archive/upload-page-panel";
 import { Footer } from "@/components/layout/footer";
 import { PageHero } from "@/components/layout/page-hero";
 import { getAppPreferences } from "@/lib/api";
 import { getDictionary } from "@/lib/i18n";
 
-export default async function UploadPage() {
+export default async function LoginPage() {
   const preferences = await getAppPreferences()
     .then((result) => result.data)
     .catch(() => ({ ui_language: "zh-CN" as const, updated_at: null }));
@@ -13,11 +13,9 @@ export default async function UploadPage() {
 
   return (
     <AppShell copy={copy}>
-      <PageHero title={copy.uploadTitle} subtitle={copy.uploadPageDescription} />
-      <div className="mx-auto max-w-2xl px-6 pb-16">
-        <div className="rounded-[1.5rem] border border-border bg-card p-6 shadow-card lg:p-8">
-          <UploadPagePanel copy={copy} />
-        </div>
+      <PageHero title={copy.signIn} subtitle={copy.localOnlyAccessNote} />
+      <div className="mx-auto max-w-xl px-6 pb-16">
+        <LoginPanel copy={copy} />
       </div>
       <Footer copy={copy} />
     </AppShell>

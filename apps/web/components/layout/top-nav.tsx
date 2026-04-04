@@ -3,8 +3,10 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Search, Camera } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Search, Camera, LogIn, Settings2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { AUTH_STATE_EVENT, getAccountStatus, type AccountStatus } from "@/lib/api";
 import type { CopyDictionary } from "@/lib/i18n";
 
 const navItems = [
@@ -26,6 +28,31 @@ export function TopNav({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const currentView = searchParams.get("view") ?? undefined;
+  const [accountStatus, setAccountStatus] = useState<AccountStatus | null>(null);
+
+  useEffect(() => {
+    async function loadAccountStatus() {
+      try {
+        const result = await getAccountStatus();
+        setAccountStatus(result.data);
+      } catch {
+        setAccountStatus({ logged_in: false, profile: null });
+      }
+    }
+
+    function handleAuthStateChange() {
+      void loadAccountStatus();
+    }
+
+    void loadAccountStatus();
+    window.addEventListener("storage", handleAuthStateChange);
+    window.addEventListener(AUTH_STATE_EVENT, handleAuthStateChange);
+
+    return () => {
+      window.removeEventListener("storage", handleAuthStateChange);
+      window.removeEventListener(AUTH_STATE_EVENT, handleAuthStateChange);
+    };
+  }, []);
 
   function isActive(item: typeof navItems[number]) {
     if (item.matchView) {
@@ -69,23 +96,52 @@ export function TopNav({
         ))}
       </div>
 
-      <div className="flex items-center gap-4">
-        <button
-          type="button"
-          onClick={onSearchClick}
+      <div className="flex items-center gap-2 sm:gap-3">
+        {onSearchClick ? (
+          <button
+            type="button"
+            onClick={onSearchClick}
+            className="text-primary/60 hover:text-primary transition-colors"
+            aria-label={copy.searchPlaceholder}
+          >
+            <Search size={18} strokeWidth={1.5} />
+          </button>
+        ) : null}
+        {onUploadClick ? (
+          <button
+            type="button"
+            onClick={onUploadClick}
+            className="text-primary/60 hover:text-primary transition-colors"
+            aria-label={copy.importShot}
+          >
+            <Camera size={18} strokeWidth={1.5} />
+          </button>
+        ) : (
+          <Link
+            href="/upload"
+            className="text-primary/60 hover:text-primary transition-colors"
+            aria-label={copy.importShot}
+          >
+            <Camera size={18} strokeWidth={1.5} />
+          </Link>
+        )}
+        <Link
+          href="/settings"
           className="text-primary/60 hover:text-primary transition-colors"
-          aria-label={copy.searchPlaceholder}
+          aria-label={copy.settings}
         >
-          <Search size={18} strokeWidth={1.5} />
-        </button>
-        <button
-          type="button"
-          onClick={onUploadClick}
-          className="text-primary/60 hover:text-primary transition-colors"
-          aria-label={copy.importShot}
+          <Settings2 size={18} strokeWidth={1.5} />
+        </Link>
+        <Link
+          href="/login"
+          aria-label={accountStatus?.profile?.display_name ?? copy.signIn}
+          className="inline-flex items-center gap-2 rounded-full border border-border px-3 py-1.5 text-[10px] uppercase tracking-[0.28em] text-primary/70 transition-colors hover:text-primary"
         >
-          <Camera size={18} strokeWidth={1.5} />
-        </button>
+          <LogIn size={15} strokeWidth={1.5} className="sm:hidden" />
+          <span className="hidden sm:block max-w-[10rem] truncate">
+            {accountStatus?.profile?.display_name ?? copy.signIn}
+          </span>
+        </Link>
       </div>
     </nav>
   );

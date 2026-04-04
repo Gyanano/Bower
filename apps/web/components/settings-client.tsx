@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { User, Cpu, Languages, ArrowLeft } from "lucide-react";
+import { AccountCard } from "@/components/account/account-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
@@ -125,10 +126,9 @@ export function SettingsClient({
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-5xl mx-auto px-6 py-8">
+    <div className="mx-auto w-full max-w-5xl px-6 pb-10">
         {/* Desktop layout */}
-        <div className="hidden md:grid grid-cols-[200px_1fr] gap-8 min-h-[calc(100vh-64px)]">
+        <div className="hidden min-h-[36rem] md:grid grid-cols-[200px_1fr] gap-8">
           {/* Sidebar */}
           <aside className="space-y-1 pt-2">
             <p className="font-headline text-lg uppercase tracking-[0.1em] text-primary mb-4">
@@ -154,11 +154,11 @@ export function SettingsClient({
 
           {/* Content */}
           <main className="space-y-8">
+            <AccountCard copy={copy} />
+
             <div>
-              <h1 className="font-headline text-3xl uppercase tracking-[0.1em] text-primary mb-2">
-                {copy.providerSectionTitle}
-              </h1>
-              <p className="text-muted-foreground text-sm leading-relaxed max-w-xl">
+              <h2 className="font-headline text-2xl text-primary">{copy.providerSectionTitle}</h2>
+              <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">
                 {copy.providerSectionDescription}
               </p>
             </div>
@@ -272,9 +272,7 @@ export function SettingsClient({
 
         {/* Mobile layout */}
         <div className="md:hidden space-y-6">
-          <h1 className="font-headline text-2xl uppercase tracking-[0.1em] text-primary text-center">
-            {copy.settings}
-          </h1>
+          <AccountCard copy={copy} />
 
           <div className="space-y-4">
             <div className="space-y-3 p-4 rounded-lg bg-card border border-border">
@@ -345,7 +343,6 @@ export function SettingsClient({
             {error && <p className="text-sm text-destructive">{error}</p>}
           </div>
         </div>
-      </div>
     </div>
   );
 }

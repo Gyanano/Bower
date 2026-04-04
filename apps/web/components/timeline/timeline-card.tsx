@@ -26,9 +26,9 @@ export function TimelineCard({
   return (
     <Link
       href={`/inspirations?selected=${item.id}`}
-      className="min-w-[280px] md:min-w-[360px] snap-start group relative flex-shrink-0"
+      className="group relative block"
     >
-      <div className="aspect-[4/5] rounded-xl overflow-hidden bg-muted transition-all duration-500 group-hover:shadow-hover">
+      <div className="aspect-[4/5] overflow-hidden rounded-xl bg-muted transition-all duration-500 group-hover:-translate-y-1 group-hover:shadow-hover">
         <img
           alt={title}
           src={resolveFileUrl(item.file_url)}
@@ -57,11 +57,11 @@ export function TimelineCard({
         )}
       </div>
 
-      <div className="mt-4 px-1">
-        <h3 className="font-headline text-base lg:text-lg uppercase tracking-[0.1em] text-primary leading-tight">
+      <div className="mt-3 px-1">
+        <h3 className="font-headline text-base uppercase tracking-[0.08em] text-primary leading-tight lg:text-lg">
           {title}
         </h3>
-        <p className="font-label text-[9px] uppercase tracking-[0.3em] text-muted-foreground mt-1 italic">
+        <p className="mt-1 font-headline text-sm text-muted-foreground italic">
           {item.board_name
             ? `${item.board_name}`
             : tags.length > 0

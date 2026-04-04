@@ -16,20 +16,19 @@ export function TimelineSection({
   copy: CopyDictionary;
 }) {
   return (
-    <div className="relative flex gap-6 md:gap-12 mb-20 lg:mb-28">
+    <div className="relative mb-16 flex gap-5 md:gap-10 lg:mb-24">
       {/* Timeline axis */}
-      <div className="flex flex-col items-center w-10 md:w-16 flex-shrink-0">
+      <div className="flex w-10 flex-shrink-0 flex-col items-center md:w-16">
         <div className="sticky top-36 flex flex-col items-center">
-          <span className="font-label text-[10px] md:text-xs font-bold uppercase tracking-[0.3em] text-primary mb-4 [writing-mode:vertical-lr] rotate-180">
+          <span className="mb-4 font-label text-[10px] font-bold uppercase tracking-[0.3em] text-primary [writing-mode:vertical-lr] rotate-180 md:text-xs">
             {dateLabel}
           </span>
           <div className="w-px h-48 bg-primary/20" />
         </div>
       </div>
 
-      {/* Horizontal scrolling cards */}
-      <div className="flex-1 overflow-hidden">
-        <div className="flex gap-6 overflow-x-auto hide-scrollbar pb-6 px-2 -mx-2 snap-x">
+      <div className="flex-1 pb-2">
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {items.map((item) => (
             <TimelineCard
               key={item.id}

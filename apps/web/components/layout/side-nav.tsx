@@ -40,7 +40,7 @@ export function SideNav({ copy }: { copy: CopyDictionary }) {
           className="rounded-full mb-1"
         />
         <span className="font-label text-[7px] text-primary/40 uppercase tracking-[0.3em]">
-          EST. 2024
+          EST. 2026
         </span>
       </div>
 
