@@ -1,11 +1,15 @@
 # Bower
 
+<p align="right">
+  <strong>简体中文</strong> | <a href="./README.en.md">English</a>
+</p>
+
 <p align="center">
   <img src="./BowerLogo.png" alt="Bower logo" width="144" height="144" />
 </p>
 
 <p align="center">
-  A local-first design archive for collecting inspiration, organizing boards, and extracting visual cues with AI.
+  一个本地优先的设计资料归档工具，用于收集灵感、整理看板，并借助 AI 提取视觉线索。
 </p>
 
 <p align="center">
@@ -24,111 +28,119 @@
 </p>
 
 <p align="center">
-  <a href="#overview">Overview</a> ·
-  <a href="#feature-surfaces">Feature Surfaces</a> ·
-  <a href="#tech-stack">Tech Stack</a> ·
-  <a href="#quick-start">Quick Start</a> ·
-  <a href="#browser-extension">Browser Extension</a> ·
-  <a href="#data--privacy">Data & Privacy</a> ·
-  <a href="#development">Development</a> ·
-  <a href="#license">License</a>
+  <a href="#overview">概览</a> ·
+  <a href="#feature-surfaces">功能界面</a> ·
+  <a href="#tech-stack">技术栈</a> ·
+  <a href="#quick-start">快速开始</a> ·
+  <a href="#browser-extension">浏览器扩展</a> ·
+  <a href="#data--privacy">数据与隐私</a> ·
+  <a href="#development">开发</a> ·
+  <a href="#license">许可证</a>
 </p>
 
-## Overview
+<a id="overview"></a>
 
-Bower is a local-first reference management system for visual research and design curation. It is built for workflows where collecting, structuring, and reusing inspiration matters as much as storing it.
+## 概览
 
-The repository currently ships with:
+Bower 是一个面向视觉研究与设计策展的本地优先参考资料管理系统。它适用于那些不仅重视资料存储，也同样重视灵感收集、结构整理与后续复用的工作流。
 
-- A Next.js web application for archive browsing, collections, timeline review, upload, login, and settings
-- A FastAPI backend for metadata, boards, AI analysis, user preferences, and local account APIs
-- A bundled browser extension for sending web images into the Bower workflow
-- SQLite-backed local storage plus filesystem-based asset storage
+当前仓库包含：
 
-## Feature Surfaces
+- 一个基于 Next.js 的 Web 应用，用于归档浏览、合集管理、时间线回顾、上传、登录和设置
+- 一个基于 FastAPI 的后端，用于处理元数据、看板、AI 分析、用户偏好和本地账户 API
+- 一个内置的浏览器扩展，用于将网页图片发送到 Bower 工作流
+- 由 SQLite 支持的本地数据存储，以及基于文件系统的资源存储
 
-### Web App
+<a id="feature-surfaces"></a>
 
-- `Archive`: browse collected references, filter by board, inspect details, and archive items
-- `Collections`: manage boards and create new board categories
-- `Timeline`: review materials in chronological order
-- `Upload`: add new references from local files
-- `Login`: local account entry for the current app setup
-- `Settings`: interface preferences and account controls
-- `AI Settings`: provider and model configuration
+## 功能界面
 
-### Browser Extension
+### Web 应用
 
-- Trigger image analysis or clipping from the browser
-- Use the same Bower branding and popup settings surface
-- Works as a companion entry point to the local app
+- `Archive`：浏览已收集的参考资料，按看板筛选，查看详情，并归档条目
+- `Collections`：管理看板并创建新的看板分类
+- `Timeline`：按时间顺序回顾资料
+- `Upload`：从本地文件新增参考资料
+- `Login`：当前应用配置下的本地账户入口
+- `Settings`：界面偏好与账户控制
+- `AI Settings`：AI 提供商与模型配置
 
-## Core Capabilities
+### 浏览器扩展
 
-- Upload inspiration images in `PNG`, `JPEG`, and `WEBP`
-- Store files locally with content-addressable paths
-- Save metadata such as title, source URL, notes, and board assignment
-- Generate AI summaries and tags with multiple provider options
-- Switch between archive, collections, and timeline review modes
-- Create and manage boards for clearer curation
-- Keep user preference and account data inside the local app environment
+- 直接在浏览器中触发图片分析或剪藏
+- 使用与 Bower 主应用一致的品牌标识和弹窗设置界面
+- 作为本地应用的配套入口使用
 
-## Tech Stack
+## 核心能力
 
-| Layer | Implementation |
+- 上传 `PNG`、`JPEG` 和 `WEBP` 灵感图片
+- 以内容寻址路径在本地存储文件
+- 保存标题、来源 URL、备注、看板归属等元数据
+- 通过多种 AI 提供商生成摘要和标签
+- 在归档、合集和时间线等浏览模式之间切换
+- 创建并管理看板，让策展更清晰
+- 将用户偏好与账户数据保留在本地应用环境内
+
+<a id="tech-stack"></a>
+
+## 技术栈
+
+| 层级 | 实现 |
 | --- | --- |
-| Frontend | Next.js 15, React 19, TypeScript |
-| Styling | App-level CSS and custom UI components |
-| Backend | FastAPI, Uvicorn |
-| Database | SQLite |
-| File Storage | Local filesystem, content-addressable storage |
-| AI Providers | OpenAI, Anthropic, Google AI Studio, ByteDance Volcano / Ark |
-| Browser Extension | Manifest V3 |
-| Workspace Tooling | pnpm workspaces, Turbo, uv |
+| 前端 | Next.js 15、React 19、TypeScript |
+| 样式 | 应用级 CSS 与自定义 UI 组件 |
+| 后端 | FastAPI、Uvicorn |
+| 数据库 | SQLite |
+| 文件存储 | 本地文件系统、内容寻址存储 |
+| AI 提供商 | OpenAI、Anthropic、Google AI Studio、ByteDance Volcano / Ark |
+| 浏览器扩展 | Manifest V3 |
+| 工作区工具链 | pnpm workspaces、Turbo、uv |
 
-## Repository Layout
+## 仓库结构
 
 ```text
 apps/
-  server/              FastAPI backend
-  web/                 Next.js frontend
-browser-extension/     Manifest V3 extension
+  server/              FastAPI 后端
+  web/                 Next.js 前端
+browser-extension/     Manifest V3 扩展
 docs/
-  Architecture.md      Architecture rationale
-  DesignSystem.md      UI direction and tokens
-  QA/                  Smoke checklists
+  Architecture.md      架构设计说明
+  DesignSystem.md      UI 方向与设计令牌
+  QA/                  冒烟检查清单
 scripts/
-  dev.mjs              Root development launcher
+  dev.mjs              根目录开发启动器
 ```
 
-## Quick Start
+<a id="quick-start"></a>
 
-### Prerequisites
+## 快速开始
+
+### 前置要求
 
 - Node.js `18+`
 - `pnpm`
 - [`uv`](https://docs.astral.sh/uv/)
-- An AI provider key if you want to run image analysis
+- 如果要运行图片分析，需要准备一个 AI 提供商密钥
 
-### Install
+### 安装
 
 ```bash
 npm run install:web
 npm run sync:server
 ```
 
-### Configure
+### 配置
 
-Frontend:
+前端：
 
 ```bash
 # apps/web/.env.local
 NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000/api/v1
 ```
 
-AI settings are primarily configured inside the app at `/settings/ai`.
+AI 设置优先在应用内的 `/settings/ai` 页面完成。
 
-Legacy environment variable fallback still exists for local automation and CI:
+为了兼容本地自动化和 CI，仍然保留了旧的环境变量回退方式：
 
 ```bash
 BOWER_AI_PROVIDER=openai
@@ -151,15 +163,15 @@ BOWER_ARK_API_KEY=your-key
 BOWER_ARK_MODEL=your-endpoint-id
 ```
 
-### Run
+### 运行
 
-Unified local startup:
+统一本地启动：
 
 ```bash
 npm run dev
 ```
 
-Or run services separately:
+或者分别启动各个服务：
 
 ```bash
 # Terminal 1
@@ -169,16 +181,18 @@ npm run dev:server
 npm run dev:web
 ```
 
-Available local surfaces:
+本地可用入口：
 
-- Web app: `http://localhost:3000`
-- API docs: `http://localhost:8000/docs`
+- Web 应用：`http://localhost:3000`
+- API 文档：`http://localhost:8000/docs`
 
-## Browser Extension
+<a id="browser-extension"></a>
 
-The project includes a bundled browser extension in [`browser-extension/`](./browser-extension).
+## 浏览器扩展
 
-### Included Files
+项目内置了一个浏览器扩展，位于 [`browser-extension/`](./browser-extension)。
+
+### 包含的文件
 
 - [`browser-extension/manifest.json`](./browser-extension/manifest.json)
 - [`browser-extension/background.js`](./browser-extension/background.js)
@@ -186,18 +200,18 @@ The project includes a bundled browser extension in [`browser-extension/`](./bro
 - [`browser-extension/popup.html`](./browser-extension/popup.html)
 - [`browser-extension/popup.js`](./browser-extension/popup.js)
 
-### Load As Unpacked Extension
+### 以未打包扩展方式加载
 
-1. Open your Chromium-based browser extensions page
-2. Enable developer mode
-3. Choose `Load unpacked`
-4. Select the `browser-extension/` directory
+1. 打开你所使用的 Chromium 系浏览器扩展页面
+2. 启用开发者模式
+3. 选择 `Load unpacked`
+4. 选择 `browser-extension/` 目录
 
-The extension now uses the same Bower logo as the web app and repository branding.
+该扩展现在使用与 Web 应用和仓库品牌一致的 Bower logo。
 
-## API Surface
+## API 范围
 
-The FastAPI backend currently exposes routes for:
+当前 FastAPI 后端暴露的路由包括：
 
 - `inspirations`
 - `image analysis`
@@ -206,7 +220,7 @@ The FastAPI backend currently exposes routes for:
 - `AI settings`
 - `preference settings`
 
-All API responses follow an envelope pattern:
+所有 API 响应都遵循统一信封结构：
 
 ```json
 {
@@ -214,7 +228,7 @@ All API responses follow an envelope pattern:
 }
 ```
 
-or
+或者：
 
 ```json
 {
@@ -225,26 +239,30 @@ or
 }
 ```
 
-## Data & Privacy
+<a id="data--privacy"></a>
 
-Bower is designed around a local-first model:
+## 数据与隐私
 
-- Images are stored on the local filesystem
-- Metadata is stored in local SQLite
-- AI provider settings can be configured from the app instead of hardcoding secrets in the repo
-- The repository only tracks `.env.example`, not real `.env` files
+Bower 围绕本地优先模型进行设计：
 
-### Repository Privacy Review
+- 图片保存在本地文件系统中
+- 元数据保存在本地 SQLite 中
+- AI 提供商设置可直接在应用中配置，而不是把密钥硬编码到仓库里
+- 仓库只跟踪 `.env.example`，不会跟踪真实 `.env` 文件
 
-A quick repository scan found:
+### 仓库隐私检查
 
-- No obvious committed API keys, private keys, or personal email addresses
-- No tracked `.env` files containing live credentials
-- Test-only placeholders such as `Bearer test-key`, which are expected and non-sensitive
+一次快速仓库扫描发现：
 
-## Development
+- 没有明显被提交的 API Key、私钥或个人邮箱地址
+- 没有被跟踪且包含真实凭据的 `.env` 文件
+- 存在如 `Bearer test-key` 之类仅用于测试的占位符，这些是预期内且不敏感的
 
-### Root Commands
+<a id="development"></a>
+
+## 开发
+
+### 根目录命令
 
 ```bash
 npm run dev
@@ -256,7 +274,7 @@ npm run test:server
 npm run build:web
 ```
 
-### Frontend
+### 前端
 
 ```bash
 cd apps/web
@@ -264,25 +282,27 @@ npm run build
 npm run lint
 ```
 
-### Backend
+### 后端
 
 ```bash
 uv run --directory apps/server pytest
 ```
 
-Single-file example:
+单文件示例：
 
 ```bash
 uv run --directory apps/server pytest tests/test_inspirations_api.py
 ```
 
-## Project Status
+## 项目状态
 
-This repository is in active product iteration. The current codebase already covers the main archive workflow and browser extension integration, but it is still evolving in areas such as packaging, documentation depth, and release formalization.
+该仓库仍处于活跃的产品迭代阶段。当前代码库已经覆盖主要的归档工作流与浏览器扩展集成，但在打包、文档深度和发布规范化等方面仍在持续演进。
 
-## License
+<a id="license"></a>
 
-This repository is licensed under the `MIT` License. See [`LICENSE`](./LICENSE).
+## 许可证
+
+本仓库基于 `MIT` License 发布。详见 [`LICENSE`](./LICENSE)。
 
 ## Star History
 
